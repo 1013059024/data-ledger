@@ -1,0 +1,121 @@
+[
+  {
+    "name": "测试",
+    "comment": "",
+    "schema": [
+      {
+        "field": "id",
+        "type": "int",
+        "nullable": "NO",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "区县",
+        "type": "varchar(255)",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "项目名称",
+        "type": "text",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "项目类型",
+        "type": "varchar(255)",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      }
+    ],
+    "created_at": "2026-05-24T13:48:30.512039"
+  },
+  {
+    "name": "测试2",
+    "comment": "",
+    "schema": [
+      {
+        "field": "id",
+        "type": "int",
+        "nullable": "NO",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "县区",
+        "type": "varchar(255)",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "乡镇",
+        "type": "varchar(255)",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "项目名称",
+        "type": "varchar(255)",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "类型",
+        "type": "varchar(255)",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      }
+    ],
+    "created_at": "2026-05-24T13:48:30.529417"
+  },
+  {
+    "name": "测试_测试2_汇总",
+    "comment": "",
+    "schema": [
+      {
+        "field": "id",
+        "type": "int",
+        "nullable": "NO",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "项目名称",
+        "type": "text",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "县区",
+        "type": "text",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "项目类型",
+        "type": "text",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "乡镇",
+        "type": "text",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      }
+    ],
+    "created_at": "2026-05-24T13:48:30.546972"
+  }
+]

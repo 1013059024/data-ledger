@@ -143,6 +143,37 @@ def _infer_type(values):
     return "TEXT"
 
 
+def create_empty_table(tn, columns=None, comment=""):
+    """创建一个空表，可指定字段列表
+    
+    columns: [{"name": "...", "type": "VARCHAR(255)"}, ...]
+    """
+    safe_name = _safe_colname(tn)
+    if not safe_name:
+        return False, "无效的表名"
+    # 检查重名
+    existing = {t["name"] for t in get_tables()}
+    if safe_name in existing:
+        return False, f"表 `{safe_name}` 已存在"
+    
+    # 构建字段定义
+    col_defs = []
+    if columns:
+        for col in columns:
+            col_name = col.get("name", "").strip()
+            col_type = col.get("type", "VARCHAR(255)").strip()
+            if col_name and col_name.lower() != "id":
+                safe_cn = _safe_colname(col_name)
+                col_defs.append(f"  `{safe_cn}` {col_type} NULL")
+    cols_sql = ", " + ", ".join(col_defs) if col_defs else ""
+    
+    sql = f"CREATE TABLE `{safe_name}` (`id` INT NOT NULL AUTO_INCREMENT{cols_sql}, PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    execute(sql)
+    if comment:
+        execute(f"ALTER TABLE `{safe_name}` COMMENT = %s", (comment,))
+    return True, f"表 `{safe_name}` 创建成功" + (f"，已添加 {len(col_defs)} 个字段" if col_defs else "")
+
+
 def create_table_from_data(headers, rows, tn):
     if not headers or not rows: return False, "表头或数据为空"
     sh = [_safe_colname(h) for h in headers]

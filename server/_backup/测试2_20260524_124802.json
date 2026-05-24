@@ -1,0 +1,42 @@
+{
+  "table": "测试2",
+  "backup_at": "20260524_124802",
+  "schema": [
+    {
+      "field": "id",
+      "type": "int",
+      "nullable": "NO",
+      "default": null,
+      "comment": ""
+    },
+    {
+      "field": "县区",
+      "type": "varchar(255)",
+      "nullable": "YES",
+      "default": null,
+      "comment": ""
+    },
+    {
+      "field": "项目名称",
+      "type": "text",
+      "nullable": "YES",
+      "default": null,
+      "comment": ""
+    },
+    {
+      "field": "项目类型",
+      "type": "varchar(255)",
+      "nullable": "YES",
+      "default": null,
+      "comment": ""
+    }
+  ],
+  "rows": [
+    {
+      "id": 2,
+      "县区": "进贤县",
+      "项目名称": "观前-杨家",
+      "项目类型": "路面升级改造"
+    }
+  ]
+}

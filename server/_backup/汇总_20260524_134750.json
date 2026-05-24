@@ -1,0 +1,50 @@
+{
+  "table": "汇总",
+  "backup_at": "20260524_134750",
+  "schema": [
+    {
+      "field": "县区",
+      "type": "text",
+      "nullable": "YES",
+      "default": null,
+      "comment": ""
+    },
+    {
+      "field": "乡镇",
+      "type": "text",
+      "nullable": "YES",
+      "default": null,
+      "comment": ""
+    },
+    {
+      "field": "项目名称",
+      "type": "text",
+      "nullable": "YES",
+      "default": null,
+      "comment": ""
+    },
+    {
+      "field": "项目类型",
+      "type": "text",
+      "nullable": "YES",
+      "default": null,
+      "comment": ""
+    },
+    {
+      "field": "id",
+      "type": "int",
+      "nullable": "NO",
+      "default": null,
+      "comment": ""
+    }
+  ],
+  "rows": [
+    {
+      "县区": "进贤县",
+      "乡镇": "池溪镇",
+      "项目名称": "观前-杨家",
+      "项目类型": "路面升级改造",
+      "id": 1
+    }
+  ]
+}

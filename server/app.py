@@ -4,7 +4,7 @@
 import os, json, uuid, tempfile, re, datetime
 from flask import Flask, jsonify, render_template, request, send_file
 from config import FLASK_SECRET, DB_CONFIG
-from db import get_tables, get_schema, get_page, get_pk_column, create_table_from_data, drop_table, rename_table, update_cell, rename_column, query_one, query, execute
+from db import get_tables, get_schema, get_page, get_pk_column, create_empty_table, create_table_from_data, drop_table, rename_table, update_cell, rename_column, query_one, query, execute
 
 app = Flask(__name__)
 app.secret_key = FLASK_SECRET
@@ -12,6 +12,9 @@ app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 _upload_cache = {}
 _MAP_FILE = os.path.join(os.path.dirname(__file__), "_sync_mappings.json")
 _GROUP_FILE = os.path.join(os.path.dirname(__file__), "_table_groups.json")
+_KF_FILE = os.path.join(os.path.dirname(__file__), "_key_fields.json")
+_BACKUP_DIR = os.path.join(os.path.dirname(__file__), "_backup")
+_DEL_TOKEN = os.urandom(8).hex()  # 每次启动随机生成，只有页面知道
 
 
 def _load_m():
@@ -34,14 +37,100 @@ def _save_g(g):
     with open(_GROUP_FILE, "w", encoding="utf-8") as f: json.dump(g, f, ensure_ascii=False, indent=2)
 
 
+def _load_kf():
+    if not os.path.exists(_KF_FILE): return {}
+    try:
+        with open(_KF_FILE, encoding="utf-8") as f: return json.load(f)
+    except: return {}
+
+def _save_kf(kf):
+    with open(_KF_FILE, "w", encoding="utf-8") as f: json.dump(kf, f, ensure_ascii=False, indent=2)
+
+
+# ── 自动备份 ──────────────────────────────────────────
+def _backup_table(table_name):
+    """删表前自动备份到 _backup/ 目录"""
+    try:
+        schema = get_schema(table_name)
+        if not schema: return
+        os.makedirs(_BACKUP_DIR, exist_ok=True)
+        pk = get_pk_column(table_name) or "id"
+        rows = query(f"SELECT * FROM `{table_name}` ORDER BY `{pk}`")
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe = re.sub(r'[\\/:*?"<>|]', '_', table_name)
+        path = os.path.join(_BACKUP_DIR, f"{safe}_{ts}.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({
+                "table": table_name,
+                "backup_at": ts,
+                "schema": schema,
+                "rows": [{k: str(v) if isinstance(v, (datetime.date, datetime.datetime)) else v
+                          for k, v in row.items()} for row in rows]
+            }, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[backup] {table_name} 备份失败: {e}")
+
+
+def _save_table_manifest():
+    """建表/导表后记录表结构到 manifest"""
+    try:
+        os.makedirs(_BACKUP_DIR, exist_ok=True)
+        manifest = []
+        for t in get_tables():
+            manifest.append({
+                "name": t["name"],
+                "comment": t["comment"],
+                "schema": get_schema(t["name"]),
+                "created_at": datetime.datetime.now().isoformat()
+            })
+        with open(os.path.join(_BACKUP_DIR, "_manifest.json"), "w", encoding="utf-8") as f:
+            json.dump(manifest, f, ensure_ascii=False, indent=2)
+    except: pass
+
+
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", del_token=_DEL_TOKEN)
 
 
 @app.route("/api/tables")
 def api_tables():
     return jsonify({"code": 0, "data": get_tables()})
+
+@app.route("/api/tables", methods=["POST"])
+def api_create_table():
+    """新建空表（手动，非导入）"""
+    d = request.get_json()
+    if not d or not d.get("name"):
+        return jsonify({"code": 1, "msg": "表名为空"})
+    name = d["name"].strip()
+    if not re.match(r'^[a-zA-Z0-9_\u4e00-\u9fff]+$', name):
+        return jsonify({"code": 1, "msg": "表名只允许字母、数字、下划线和中文"})
+    if len(name) > 64:
+        return jsonify({"code": 1, "msg": "表名不能超过64个字符"})
+    columns = d.get("columns", [])
+    for col in columns:
+        cn = col.get("name", "").strip()
+        if not cn:
+            return jsonify({"code": 1, "msg": "字段名不能为空"})
+        if not re.match(r'^[a-zA-Z0-9_\u4e00-\u9fff]+$', cn):
+            return jsonify({"code": 1, "msg": f"字段名「{cn}」只允许字母、数字、下划线和中文"})
+    key_field = d.get("key_field", "").strip()
+    if key_field and not re.match(r'^[a-zA-Z0-9_\u4e00-\u9fff]+$', key_field):
+        return jsonify({"code": 1, "msg": "关键字段名只允许字母、数字、下划线和中文"})
+    try:
+        ok, msg = create_empty_table(name, columns)
+        if ok:
+            if key_field:
+                kf_map = _load_kf()
+                kf_map[name] = key_field
+                _save_kf(kf_map)
+            _save_table_manifest()
+            return jsonify({"code": 0, "msg": msg + (f"，关键字段: {key_field}" if key_field else "")})
+        else:
+            return jsonify({"code": 1, "msg": msg})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"建表失败: {str(e)}"})
 
 # ========== 表分组 ==========
 
@@ -57,9 +146,43 @@ def api_save_groups():
     return jsonify({"code": 0, "msg": f"已保存 {len(d['groups'])} 个分组"})
 
 
+# ========== 关键字段 ==========
+
+@app.route("/api/table/<table_name>/key-field", methods=["GET"])
+def api_get_key_field(table_name):
+    kf = _load_kf().get(table_name, "")
+    return jsonify({"code": 0, "data": {"key_field": kf}})
+
+@app.route("/api/table/<table_name>/key-field", methods=["PUT"])
+def api_set_key_field(table_name):
+    d = request.get_json()
+    kf = (d or {}).get("key_field", "").strip()
+    sch = get_schema(table_name)
+    if not sch: return jsonify({"code": 1, "msg": "表不存在"})
+    if kf and kf not in [s["field"] for s in sch]:
+        return jsonify({"code": 1, "msg": f"字段 `{kf}` 不存在于表中"})
+    km = _load_kf()
+    if kf:
+        km[table_name] = kf
+    else:
+        km.pop(table_name, None)
+    _save_kf(km)
+    return jsonify({"code": 0, "msg": f"关键字段已设置为 `{kf}`" if kf else "关键字段已清除"})
+
+
 @app.route("/api/table/<table_name>", methods=["DELETE"])
 def api_delete_table(table_name):
-    try: drop_table(table_name); return jsonify({"code": 0, "msg": "已删除"})
+    try:
+        # 安全防护：有数据的表必须传正确的删除令牌（从页面获取）才能删除
+        d = request.get_json(silent=True) or {}
+        token = d.get("del_token", "") if isinstance(d, dict) else ""
+        if token != _DEL_TOKEN:
+            return jsonify({"code": 1, "msg": "拒绝删除缺少有效的删除令牌（仅页面 UI 可执行删除操作）"})
+        _backup_table(table_name)
+        km = _load_kf(); km.pop(table_name, None); _save_kf(km)
+        drop_table(table_name)
+        _save_table_manifest()
+        return jsonify({"code": 0, "msg": "已删除（已备份到 _backup/）"})
     except Exception as e: return jsonify({"code": 1, "msg": f"删除失败: {str(e)}"})
 
 
@@ -72,7 +195,14 @@ def api_rename_table(table_name):
         return jsonify({"code": 1, "msg": "表名只允许字母、数字、下划线和中文"})
     if len(nn) > 64: return jsonify({"code": 1, "msg": "表名不能超过64个字符"})
     if nn == table_name: return jsonify({"code": 0, "msg": "未改变"})
-    try: rename_table(table_name, nn); db_execute(f"ALTER TABLE `{nn}` COMMENT = %s", (nn,)); return jsonify({"code": 0, "msg": f"已重命名为 `{nn}`"})
+    try:
+        rename_table(table_name, nn)
+        db_execute(f"ALTER TABLE `{nn}` COMMENT = %s", (nn,))
+        km = _load_kf()
+        if table_name in km:
+            km[nn] = km.pop(table_name)
+            _save_kf(km)
+        return jsonify({"code": 0, "msg": f"已重命名为 `{nn}`"})
     except Exception as e: return jsonify({"code": 1, "msg": f"重命名失败: {str(e)}"})
 
 
@@ -81,7 +211,21 @@ def api_rename_column(table_name):
     d = request.get_json(); old = (d or {}).get("old",""); nn = (d or {}).get("new","")
     if not old or not nn: return jsonify({"code": 1, "msg": "参数不全"})
     if nn.lower() == "id": return jsonify({"code": 1, "msg": "id 字段不能修改"})
-    try: rename_column(table_name, old, nn); return jsonify({"code": 0, "msg": "字段已重命名"})
+    try:
+        rename_column(table_name, old, nn)
+        # 更新所有映射中的字段名
+        mappings = _load_m()
+        changed = False
+        for mp in mappings:
+            if mp["st"] == table_name:
+                for p in mp["ps"]:
+                    if p["s"] == old: p["s"] = nn; changed = True
+            if mp["tt"] == table_name:
+                for p in mp["ps"]:
+                    if p["t"] == old: p["t"] = nn; changed = True
+        if changed:
+            _save_m(mappings)
+        return jsonify({"code": 0, "msg": "字段已重命名，相关映射已更新"})
     except Exception as e: return jsonify({"code": 1, "msg": str(e)})
 
 
@@ -187,6 +331,42 @@ def api_set_column_type(table_name, column_name):
     except Exception as e:
         return jsonify({"code": 1, "msg": f"修改失败: {e}"})
 
+
+@app.route("/api/table/<table_name>/reorder-columns", methods=["PUT"])
+def api_reorder_columns(table_name):
+    """调整表字段顺序"""
+    d = request.get_json()
+    new_order = (d or {}).get("columns", [])
+    if not new_order:
+        return jsonify({"code": 1, "msg": "请提供新字段顺序"})
+    try:
+        schema = get_schema(table_name)
+        if not schema: return jsonify({"code": 1, "msg": "表不存在"})
+        schema_fields = [s["field"] for s in schema if s["field"] not in ("id", "_deleted")]
+        if set(new_order) != set(schema_fields):
+            missing = set(schema_fields) - set(new_order)
+            extra = set(new_order) - set(schema_fields)
+            msg = "字段不匹配"
+            if missing: msg += f"，缺少: {missing}"
+            if extra: msg += f"，多余: {extra}"
+            return jsonify({"code": 1, "msg": msg})
+        from db import get_conn
+        conn = get_conn()
+        with conn.cursor() as cur:
+            prev = None
+            for fld in new_order:
+                col_type = next((s["type"] for s in schema if s["field"] == fld), "VARCHAR(255)")
+                if prev:
+                    cur.execute(f"ALTER TABLE `{table_name}` MODIFY COLUMN `{fld}` {col_type} AFTER `{prev}`")
+                else:
+                    cur.execute(f"ALTER TABLE `{table_name}` MODIFY COLUMN `{fld}` {col_type} FIRST")
+                prev = fld
+        conn.commit()
+        return jsonify({"code": 0, "msg": "字段顺序已调整"})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"调整失败: {e}"})
+
+
 @app.route("/api/table/<table_name>/column/<column_name>", methods=["DELETE"])
 def api_delete_column(table_name, column_name):
     """删除指定列"""
@@ -258,25 +438,70 @@ def api_batch_update():
 
 @app.route("/api/table/<table_name>/export")
 def api_export_table(table_name):
-    """导出表数据为 Excel"""
+    """导出表数据为 Excel（公文格式：标题+黑体表头+仿宋正文+全框线+居中）"""
     try:
-        import openpyxl; from openpyxl.styles import Font; from io import BytesIO
+        import openpyxl; from openpyxl.styles import Font, Alignment, Border, Side; from openpyxl.utils import get_column_letter; from io import BytesIO
         schema = get_schema(table_name)
         if not schema: return jsonify({"code": 1, "msg": "表不存在"})
         pk = get_pk_column(table_name) or "id"
         fields = [s["field"] for s in schema if s["field"] not in (pk, "_deleted")]
         rows = query(f"SELECT * FROM `{table_name}` ORDER BY `{pk}`")
         wb = openpyxl.Workbook(); ws = wb.active; ws.title = (table_name or "sheet")[:31]
-        hf = Font(bold=True)
-        for ci, f in enumerate(fields, 1): ws.cell(1, ci, f).font = hf
-        ri = 2
+        # 表格标题：与系统预览页保持一致（直接使用 table_name）
+        title_text = table_name
+        # ── 公文格式样式 ──────────────────────────────
+        title_font   = Font(name="黑体", size=16, bold=True)          # 三号黑体
+        hdr_font     = Font(name="黑体", size=10.5, bold=True)         # 五号黑体加粗
+        body_font    = Font(name="仿宋", size=10.5)                     # 五号仿宋
+        center_align = Alignment(horizontal="center", vertical="center", wrap_text=False)
+        thin_line    = Side(style="thin", color="000000")               # 0.5pt 黑色实线
+        thin_border  = Border(left=thin_line, right=thin_line, top=thin_line, bottom=thin_line)
+        # ── 行 1：标题 ─────────────────────────────────
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(fields))
+        title_cell = ws.cell(1, 1, title_text)
+        title_cell.font = title_font
+        title_cell.alignment = Alignment(horizontal="center", vertical="center")
+        ws.row_dimensions[1].height = 36  # 标题行高
+        # ── 行 2：表头 ─────────────────────────────────
+        for ci, f in enumerate(fields, 1):
+            cell = ws.cell(2, ci, f)
+            cell.font = hdr_font
+            cell.alignment = center_align
+            cell.border = thin_border
+        ws.row_dimensions[2].height = 24
+        # ── 写数据 + 列宽计算 ──────────────────────────
+        col_widths = {}
+        for ci, f in enumerate(fields, 1):
+            cw = sum(18 if ord(ch) > 0x4e00 else 7 for ch in str(f))
+            col_widths[ci] = cw + 4
+        ri = 3
         for row in rows:
             if "_deleted" in row and row["_deleted"] == 1: continue
-            for ci, f in enumerate(fields, 1): ws.cell(ri, ci, row.get(f))
+            ws.row_dimensions[ri].height = 22
+            for ci, f in enumerate(fields, 1):
+                val = row.get(f)
+                cell = ws.cell(ri, ci, val)
+                cell.font = body_font
+                cell.alignment = center_align
+                cell.border = thin_border
+                sv = str(val) if val is not None else ""
+                cw = sum(18 if ord(ch) > 0x4e00 else 7 for ch in sv)
+                if cw > col_widths.get(ci, 0):
+                    col_widths[ci] = cw
             ri += 1
-        for col in ws.columns:
-            ml = max((len(str(c.value or "")) for c in col), default=0)
-            ws.column_dimensions[col[0].column_letter].width = min(ml + 2, 50)
+        # ── 应用列宽 ───────────────────────────────────
+        for ci in col_widths:
+            ws.column_dimensions[get_column_letter(ci)].width = min(max(col_widths[ci] / 7 + 2, 8), 80)
+        # ── 打印设置 ───────────────────────────────────
+        last_row = ri - 1
+        ws.print_area = f"A1:{get_column_letter(len(fields))}{last_row}"
+        ws.page_setup.orientation = "landscape" if len(fields) > 6 else "portrait"
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.page_margins.left = 0.5
+        ws.page_margins.right = 0.5
+        # 冻结标题+表头行
+        ws.freeze_panes = "A3"
         buf = BytesIO(); wb.save(buf); buf.seek(0)
         return send_file(buf, download_name=f"{table_name}.xlsx", as_attachment=True)
     except Exception as e:
@@ -290,15 +515,23 @@ def api_update_cell(table_name):
     if row_id is None or not field: return jsonify({"code": 1, "msg": "参数不全"})
     # 关键字段唯一性检查
     if value is not None and str(value).strip():
+        is_key = False
+        # 检查同步映射中的关键字段
         for mp in _load_m():
             if table_name in (mp["st"], mp["tt"]) and mp["kf"] == field:
-                pk = get_pk_column(table_name) or "id"
-                has_del = any(s["field"] == "_deleted" for s in get_schema(table_name))
-                del_cond = "AND (`_deleted` IS NULL OR `_deleted`!=1)" if has_del else ""
-                cnt = query_one(f"SELECT COUNT(*) AS c FROM `{table_name}` WHERE `{field}`=%s AND `{pk}`!=%s {del_cond}", (value, row_id))
-                if cnt and cnt["c"] > 0:
-                    return jsonify({"code": 1, "msg": f"关键字段「{field}」值「{value}」已存在，不能重复"})
-                break
+                is_key = True; break
+        # 检查表自身设定的关键字段
+        if not is_key:
+            stored_kf = _load_kf().get(table_name, "")
+            if stored_kf == field:
+                is_key = True
+        if is_key:
+            pk = get_pk_column(table_name) or "id"
+            has_del = any(s["field"] == "_deleted" for s in get_schema(table_name))
+            del_cond = "AND (`_deleted` IS NULL OR `_deleted`!=1)" if has_del else ""
+            cnt = query_one(f"SELECT COUNT(*) AS c FROM `{table_name}` WHERE `{field}`=%s AND `{pk}`!=%s {del_cond}", (value, row_id))
+            if cnt and cnt["c"] > 0:
+                return jsonify({"code": 1, "msg": f"关键字段「{field}」值「{value}」已存在，不能重复"})
     try:
         update_cell(table_name, row_id, field, value)
         msg = "已更新"
@@ -527,16 +760,33 @@ def api_clipboard_paste():
         if sf in tgt_all_fields and sf != pk:
             col_map[sf] = src_fields.index(sf)
     if not col_map: return jsonify({"code": 1, "msg": "源字段与目标表无匹配字段"})
-    # 自动识别关键字段：优先用与目标表 PK 同名的字段
-    kf = pk if pk in src_fields else list(col_map.keys())[0]
+    # 自动识别关键字段：① 目标表存储的关键字段 → ② 源表中的目标表 PK → ③ 第一个匹配字段
+    stored_kf = _load_kf().get(tgt, "")
+    kf = ""
+    if stored_kf and stored_kf in src_fields:
+        kf = stored_kf
+    elif pk in src_fields:
+        kf = pk
+    else:
+        kf = list(col_map.keys())[0]
+    # 如果唯一匹配的字段就是关键字段本身 → 仅更新该字段值（允许用户同步同名字段）
+    non_key_cols = {f for f in col_map if f != kf}
     # 读取目标表已有记录的关键值
-    tgt_exists = {}
+    has_deleted = any(s["field"] == "_deleted" for s in schema)
+    visible_exists = {}   # 可见记录的关键值 → id
+    hidden_exists = {}    # 隐藏记录的关键值 → id
     if kf:
         try:
-            for row in query(f"SELECT `id`,`{kf}` FROM `{tgt}` WHERE `{kf}` IS NOT NULL AND TRIM(`{kf}`)!=''"):
-                tgt_exists[str(row[kf]).strip()] = row["id"]
+            sel_cols = f"`id`,`{kf}`" + (", `_deleted`" if has_deleted else "")
+            for row in query(f"SELECT {sel_cols} FROM `{tgt}` WHERE `{kf}` IS NOT NULL AND TRIM(`{kf}`)!=''"):
+                rid = str(row[kf]).strip()
+                is_hidden = has_deleted and row.get("_deleted", 0) == 1
+                if is_hidden:
+                    hidden_exists[rid] = row["id"]
+                else:
+                    visible_exists[rid] = row["id"]
         except: pass
-    updated, inserted = 0, 0
+    updated, inserted, restored = 0, 0, 0
     for crow in _clipboard["rows"]:
         kv = ""
         if kf in src_fields:
@@ -546,17 +796,27 @@ def api_clipboard_paste():
         for tf, ci in col_map.items():
             if ci < len(crow) and crow[ci] is not None and str(crow[ci]).strip():
                 tf_vals[tf] = crow[ci]
-        if kv and kv in tgt_exists:
-            if not tf_vals: continue
+        if not tf_vals: continue
+        if kv and kv in visible_exists:
+            # 更新已有可见记录
             sets = ", ".join([f"`{f}`=%s" for f in tf_vals])
             try:
                 execute(f"UPDATE `{tgt}` SET {sets} WHERE `{kf}`=%s", list(tf_vals.values()) + [kv])
                 updated += 1
             except: pass
+        elif kv and kv in hidden_exists:
+            # 隐藏记录 → 恢复显示 + 更新数据
+            sets = ", ".join([f"`{f}`=%s" for f in list(tf_vals.keys()) + (["_deleted"] if has_deleted else [])])
+            vals = list(tf_vals.values()) + ([0] if has_deleted else []) + [kv]
+            try:
+                execute(f"UPDATE `{tgt}` SET {sets} WHERE `{kf}`=%s", vals)
+                restored += 1
+            except: pass
         else:
+            # 不存在 → 新增
             all_cols = list(tf_vals.keys())
             all_vals = list(tf_vals.values())
-            if kv and kf:
+            if kv and kf and kf not in all_cols:
                 all_cols.insert(0, kf)
                 all_vals.insert(0, kv)
             if not all_cols: continue
@@ -585,8 +845,12 @@ def api_clipboard_paste():
                         execute(f"UPDATE `{tgt}` SET {sets} WHERE `{kf}`=%s", list(af_vals.values()) + [kv])
                     except: pass
                 break
-    return jsonify({"code": 0, "msg": f"粘贴完成：更新 {updated} 行，新增 {inserted} 行",
-        "updated": updated, "inserted": inserted})
+    parts = []
+    if updated: parts.append(f"更新 {updated} 行")
+    if inserted: parts.append(f"新增 {inserted} 行")
+    if restored: parts.append(f"恢复 {restored} 行（从隐藏状态恢复）")
+    msg = "粘贴完成：" + "，".join(parts) if parts else "粘贴完成：无变化"
+    return jsonify({"code": 0, "msg": msg, "updated": updated, "inserted": inserted, "restored": restored})
 
 @app.route("/api/clipboard/clear", methods=["POST"])
 def api_clipboard_clear():
@@ -606,7 +870,294 @@ def api_clipboard_status():
     }})
 
 
+# ========== 多表汇总 ==========
+
+@app.route("/api/aggregate/preview", methods=["POST"])
+def api_aggregate_preview():
+    """预览多表汇总结果"""
+    d = request.get_json()
+    if not d: return jsonify({"code": 1, "msg": "请求为空"})
+    table_names = d.get("tables", [])
+    key_field = (d.get("key_field") or "").strip()
+    if len(table_names) < 2:
+        return jsonify({"code": 1, "msg": "请选择至少 2 张表"})
+    if not key_field:
+        return jsonify({"code": 1, "msg": "请选择关键字段（汇总依据）"})
+    try:
+        # 加载已有的字段映射，用于合并同义不同名的字段
+        mappings = _load_m()  # [{"st":"A","tt":"B","kf":"项目编号","ps":[{"s":"源字段","t":"目标字段"},...]}]
+        all_keys = set()
+        table_data = {}
+        for tn in table_names:
+            schema = get_schema(tn)
+            if not schema: return jsonify({"code": 1, "msg": f"表 `{tn}` 不存在"})
+            fields = [s["field"] for s in schema if s["field"] not in ("id", "_deleted", key_field)]
+            has_del = any(s["field"] == "_deleted" for s in schema)
+            rows = query(f"SELECT * FROM `{tn}` ORDER BY `{key_field}`")
+            table_data[tn] = {"fields": fields, "records": {}}
+            for row in rows:
+                if has_del and row.get("_deleted", 0) == 1: continue
+                kv = str(row.get(key_field, "")).strip()
+                if not kv: continue
+                all_keys.add(kv)
+                rec = {}
+                for f in fields:
+                    rec[f] = row.get(f)
+                table_data[tn]["records"][kv] = rec
+        # 构建映射字典： (table1, table2) → { field1: field2 }
+        # 统一用 (table1, table2) 方向存储，table1 的字段映射到 table2 的字段
+        merge_map = {}
+        for mp in mappings:
+            if mp["st"] in table_names and mp["tt"] in table_names:
+                key = (mp["st"], mp["tt"])
+                if key not in merge_map:
+                    merge_map[key] = {}
+                for p in mp["ps"]:
+                    merge_map[key][p["s"]] = p["t"]
+        # 统一字段名：对存在映射的不同名成对字段，只保留第一个表的字段名
+        unified_warnings = []
+        merged_headers = [key_field]
+        field_sources = {}  # header_name → (table_name, field_on_that_table)
+        for tn in table_names:
+            for f in table_data[tn]["fields"]:
+                hdr = f
+                # 检查是否已有映射对中的另一方已作为表头存在
+                merged = False
+                for (t1, t2), pairs in merge_map.items():
+                    # 检查当前表是 t1 还是 t2
+                    if tn == t1:
+                        other_table = t2
+                        if other_table not in table_names:
+                            continue
+                        # f 是 t1 的字段 → 找映射到 t2 的字段
+                        if f in pairs:
+                            mapped_field = pairs[f]
+                        else:
+                            continue
+                    elif tn == t2:
+                        other_table = t1
+                        if other_table not in table_names:
+                            continue
+                        # f 是 t2 的字段 → 找反向映射
+                        mapped_field = None
+                        for src_f, tgt_f in pairs.items():
+                            if tgt_f == f:
+                                mapped_field = src_f
+                                break
+                        if mapped_field is None:
+                            continue
+                    else:
+                        continue
+                    if mapped_field and mapped_field in field_sources:
+                        # 对方表已用 mapped_field 作为表头 → 共用此列（数据合并到该列）
+                        merged = True
+                        if mapped_field != f:
+                            conflict_pair = {"tables": [tn, other_table], "fields": [f, mapped_field], "default_name": mapped_field}
+                            # 去重
+                            dup = False
+                            for cw in unified_warnings:
+                                if cw.get("fields") and set(cw["fields"]) == set(conflict_pair["fields"]):
+                                    dup = True; break
+                            if not dup:
+                                unified_warnings.append(conflict_pair)
+                        break
+                    elif mapped_field and mapped_field not in field_sources and tn != other_table:
+                        # f 有映射但对方字段尚未作为表头 → 用 f 作为表头
+                        pass  # 使用当前字段名
+                if merged:
+                    continue
+                if hdr in field_sources:
+                    # 真正同名的已有，但非映射关系 → 加表名前缀
+                    hdr = f"{tn}.{f}"
+                merged_headers.append(hdr)
+                field_sources[hdr] = (tn, f)
+        # 合并行数据
+        merged_rows = []
+        for kv in sorted(all_keys):
+            row = [kv]
+            for hdr in merged_headers[1:]:
+                tn, f = field_sources[hdr]
+                rec = table_data[tn]["records"].get(kv)
+                row.append(rec.get(f) if rec else None)
+            merged_rows.append(row)
+        # 分离 field_conflicts 和普通 warnings
+        field_conflicts = [w for w in unified_warnings if isinstance(w, dict) and "fields" in w]
+        text_warnings = [w for w in unified_warnings if not isinstance(w, dict)]
+        # orphan_suggestions: 列出每张表独有的字段（不会被映射合并的同名/不同名字段）
+        orphan_suggestions = {}
+        for tn in table_names:
+            unique = []
+            for f in table_data[tn]["fields"]:
+                if f == key_field: continue
+                # 检查是否被映射合并（已在 field_conflicts 中）
+                in_conflict = False
+                for c in field_conflicts:
+                    if f in c["fields"]:
+                        in_conflict = True; break
+                # 检查其他表是否有同名字段（自动合并）
+                same_in_other = False
+                for ot in table_names:
+                    if ot == tn: continue
+                    if f in table_data[ot]["fields"]:
+                        same_in_other = True; break
+                if not in_conflict and not same_in_other:
+                    unique.append(f)
+            if unique:
+                orphan_suggestions[tn] = unique
+        return jsonify({"code": 0, "data": {
+            "headers": merged_headers,
+            "rows": merged_rows[:100],
+            "total": len(merged_rows),
+            "warnings": text_warnings,
+            "field_conflicts": field_conflicts,
+            "orphan_fields": orphan_suggestions  # 每张表独有的字段
+        }})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"汇总失败: {str(e)}"})
+
+
+@app.route("/api/aggregate/create", methods=["POST"])
+def api_aggregate_create():
+    """创建汇总表，并自动建立汇总表与各源表的映射"""
+    d = request.get_json()
+    if not d: return jsonify({"code": 1, "msg": "请求为空"})
+    new_name = (d.get("new_name") or "").strip()
+    if not new_name: return jsonify({"code": 1, "msg": "请填写新表名"})
+    headers = d.get("headers", [])
+    rows = d.get("rows", [])
+    source_tables = d.get("tables", [])
+    key_field = (d.get("key_field") or "").strip()
+    if not headers or not rows:
+        return jsonify({"code": 1, "msg": "无数据"})
+    try:
+        from db import create_table_from_data, get_schema
+        ok, msg = create_table_from_data(headers, rows, new_name)
+        if not ok:
+            return jsonify({"code": 1, "msg": msg})
+        _save_table_manifest()
+        # 自动建立汇总表与各源表的同步映射
+        mappings = _load_m()
+        agg_fields = [s["field"] for s in get_schema(new_name) if s["field"] not in ("id", "_deleted")]
+        # 收集源表之间的映射关系，用于处理不同名但映射过的字段
+        src_pairs = {}  # { (st, tt) : { st_field: tt_field } }
+        for mp in mappings:
+            if mp["st"] in source_tables and mp["tt"] in source_tables:
+                k = (mp["st"], mp["tt"])
+                src_pairs[k] = {p["s"]: p["t"] for p in mp["ps"]}
+        for st in source_tables:
+            src_schema = get_schema(st)
+            if not src_schema: continue
+            src_fields = [s["field"] for s in src_schema if s["field"] not in ("id", "_deleted")]
+            pairs = []
+            # 为 agg_fields 中的每个字段找对应
+            for f in agg_fields:
+                if f in src_fields:
+                    # 同名字段直接映射
+                    pairs.append({"s": f, "t": f})
+                else:
+                    # 不同名：检查是否有源表间的映射关系能关联
+                    for (t1, t2), sm in src_pairs.items():
+                        # 情况1：st 是 t1（源），f 映射到了 t2 的某个字段
+                        if st == t1:
+                            for src_f, tgt_f in sm.items():
+                                if tgt_f == f and src_f in agg_fields:
+                                    pairs.append({"s": src_f, "t": src_f})
+                                    break
+                        # 情况2：st 是 t2（目标表），t1 的 src_f 映射到 st 的 tgt_f
+                        # 汇总表的 f == src_f → B表字段 tgt_f 应映射到汇总表字段 f
+                        if st == t2:
+                            for src_f, tgt_f in sm.items():
+                                if src_f == f:
+                                    # tgt_f 是 B 表中的字段名，f 是汇总表中的字段名
+                                    pairs.append({"s": tgt_f, "t": f})
+                                    break
+            if pairs:
+                # 去重
+                seen = set()
+                deduped = []
+                for p in pairs:
+                    k = p["s"] + ":" + p["t"]
+                    if k not in seen:
+                        seen.add(k); deduped.append(p)
+                mappings.append({"st": st, "tt": new_name, "kf": key_field, "ps": deduped})
+        _save_m(mappings)
+        # 设置汇总表的关键字段与源表一致
+        if key_field:
+            km = _load_kf()
+            km[new_name] = key_field
+            _save_kf(km)
+        return jsonify({"code": 0, "msg": msg, "table_name": new_name})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"创建汇总表失败: {str(e)}"})
+
+
 # ========== 上传 ==========
+
+# ========== 备份与恢复 ==========
+
+@app.route("/api/backup/list", methods=["GET"])
+def api_backup_list():
+    """列出 _backup/ 目录下的所有备份"""
+    try:
+        os.makedirs(_BACKUP_DIR, exist_ok=True)
+        files = []
+        for fn in os.listdir(_BACKUP_DIR):
+            if fn.endswith(".json") and fn != "_manifest.json":
+                path = os.path.join(_BACKUP_DIR, fn)
+                with open(path, encoding="utf-8") as f:
+                    meta = json.load(f)
+                files.append({
+                    "filename": fn,
+                    "table": meta.get("table", fn),
+                    "backup_at": meta.get("backup_at", ""),
+                    "rows": len(meta.get("rows", [])),
+                    "size": os.path.getsize(path)
+                })
+        files.sort(key=lambda x: x["backup_at"], reverse=True)
+        return jsonify({"code": 0, "data": files, "manifest_exists": os.path.exists(os.path.join(_BACKUP_DIR, "_manifest.json"))})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": str(e)})
+
+
+@app.route("/api/backup/restore", methods=["POST"])
+def api_backup_restore():
+    """从备份文件恢复一张表"""
+    d = request.get_json()
+    filename = (d or {}).get("filename", "")
+    if not filename: return jsonify({"code": 1, "msg": "备份文件名为空"})
+    path = os.path.join(_BACKUP_DIR, filename)
+    if not os.path.exists(path): return jsonify({"code": 1, "msg": "备份文件不存在"})
+    try:
+        with open(path, encoding="utf-8") as f:
+            bk = json.load(f)
+        tn = bk["table"]
+        # 如果表已存在，先备份再删
+        schema = get_schema(tn)
+        if schema:
+            _backup_table(tn)
+            drop_table(tn)
+        # 重建表
+        col_defs = []
+        for s in bk["schema"]:
+            if s["field"] == "id": continue
+            col_defs.append(f"`{s['field']}` {s['type']} NULL")
+        sql = f"CREATE TABLE `{tn}` (`id` INT NOT NULL AUTO_INCREMENT, {', '.join(col_defs)}, PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        execute(sql)
+        # 恢复数据
+        fields = [s["field"] for s in bk["schema"] if s["field"] != "id"]
+        if bk["rows"]:
+            ph = ", ".join(["%s"] * len(fields))
+            fl = ", ".join([f"`{f}`" for f in fields])
+            for row in bk["rows"]:
+                vals = [row.get(f) for f in fields]
+                try:
+                    execute(f"INSERT INTO `{tn}` ({fl}) VALUES ({ph})", vals)
+                except: pass
+        _save_table_manifest()
+        return jsonify({"code": 0, "msg": f"表 `{tn}` 已恢复，共 {len(bk['rows'])} 条记录"})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"恢复失败: {str(e)}"})
+
 
 @app.route("/api/upload/parse", methods=["POST"])
 def api_upload_parse():
@@ -729,6 +1280,7 @@ def api_upload_import():
     ok, msg = create_table_from_data(uh, flt, tn); _cleanup(sid)
     if ok:
         db_execute(f"ALTER TABLE `{tn}` COMMENT = %s", (title or tn,))
+        _save_table_manifest()
     if ok: msg += f"（省略 {len(ah)-len(uh)} 列，过滤 {before-len(flt)} 行）"
     return jsonify({"code": 0 if ok else 1, "msg": msg, "table_name": tn})
 

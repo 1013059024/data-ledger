@@ -14,29 +14,37 @@
 ## 目录结构
 
 ```
-C:\Users\one\road-ledger\
+road-ledger-main/
 ├── README.md                  # 本文件
+├── start.py                   # 一键启动脚本（Python，推荐）
+├── start_debug.bat            # 一键启动脚本（批处理，带 LAN 共享）
+├── close_debug.bat            # 关闭防火墙端口
+├── mysql-data/                # MySQL 数据目录（自动初始化）
 ├── server/
 │   ├── app.py                 # Flask 入口（路由 + API）
 │   ├── db.py                  # MySQL 操作（查询/分页/建表/同步）
 │   ├── config.py              # MySQL 连接配置
 │   ├── requirements.txt       # Python 依赖
 │   ├── _sync_mappings.json    # 字段映射配置
+│   ├── _table_groups.json     # 表分组配置
 │   ├── _uploads/              # 上传临时文件
 │   ├── templates/index.html   # 前端页面
 │   └── static/css/style.css   # 自定义样式
 ```
 
-## 启动
+## 启动（推荐）
 
 ```bash
-cd C:\Users\one\road-ledger\server
-python app.py
+# Python 方式（跨平台，自动处理 MySQL）
+python start.py
+
+# Windows 批处理方式（含 LAN 共享）
+start_debug.bat
 ```
 
 访问 `http://127.0.0.1:5000`
 
-> MySQL 服务须已运行（服务名 MySQL80，root/空密码，road_ledger 库已建）。
+> MySQL 8.4 须已安装（默认路径 `C:\Program Files\MySQL\MySQL Server 8.4\`），首次启动会自动初始化数据目录和数据库。root 空密码。
 
 ## 功能
 
