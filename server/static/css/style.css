@@ -177,6 +177,26 @@ table.dataTable tbody td {
 #dataTable.table-gongwen thead th:first-child { width: 50px; }
 #dataTable.table-gongwen tbody td:first-child { width: 50px; }
 
+/* 冻结表头 — sticky 固定 + 实色背景挡下方内容 */
+#dataTable thead th {
+    position: sticky !important;
+    top: 0;
+    z-index: 10;
+    background: #f8f9fa !important;
+}
+#dataTable.table-gongwen thead th {
+    position: sticky !important;
+    top: 0;
+    z-index: 10;
+}
+/* 表头底线 — 与单元格边框一致 */
+#dataTable thead th {
+    border-bottom: 1px solid #dee2e6 !important;
+}
+#dataTable.table-gongwen thead th {
+    border-bottom: 0.5pt solid #000 !important;
+}
+
 /* 选中单元格 */
 
 td.selected-cell {
@@ -191,7 +211,7 @@ th.selected-header {
 }
 
 /* 双击编辑输入框铺满整个单元格 */
-td.editable { position: relative; }
+td.editable { position: relative; user-select: none; -webkit-user-select: none; }
 td.editable input.cell-editor,
 th.col-head input {
     position: absolute !important;

@@ -1,7 +1,7 @@
 """
 MySQL 数据库操作工具
 """
-import re, pymysql
+import re, datetime, pymysql
 from config import DB_CONFIG
 
 
@@ -45,20 +45,57 @@ def get_pk_column(tn):
     return r["field"] if r else None
 
 
-def get_page(tn, page=1, per_page=50, search="", order_field=None, order_dir="asc", hide_deleted=False):
+def distinct_values(tn, field, search="", filters=None):
+    """获取某列的去重值，支持搜索过滤和级联筛选"""
+    schema = get_schema(tn)
+    if not any(s["field"] == field for s in schema):
+        return []
+    conds = []; pa = []
+    has_del = any(s["field"] == "_deleted" for s in schema)
+    if has_del:
+        conds.append("IFNULL(`_deleted`,0) != 1")
+    # 级联筛选：排除自身字段，用其他字段的筛选值做条件
+    if filters and isinstance(filters, dict):
+        for fld, vals in filters.items():
+            if fld != field and fld in [s["field"] for s in schema] and vals and isinstance(vals, list) and len(vals):
+                phs = ", ".join(["%s"]*len(vals))
+                conds.append(f"`{fld}` IN ({phs})")
+                pa.extend(vals)
+    if search:
+        conds.append(f"`{field}` LIKE %s")
+        pa.append(f"%{search}%")
+    ws = " WHERE " + " AND ".join(conds) if conds else ""
+    rows = query(f"SELECT DISTINCT `{field}` AS v FROM `{tn}`{ws} ORDER BY `{field}`", pa)
+    return [r["v"] for r in rows if r["v"] is not None]
+
+
+def get_page(tn, page=1, per_page=50, search="", order_field=None, order_dir="asc", hide_deleted=False, filters=None):
     offset = (page-1)*per_page; schema = get_schema(tn)
     if not schema: return 0, []
     fields = [s["field"] for s in schema]; tf = [s["field"] for s in schema if "varchar" in s["type"].lower() or "text" in s["type"].lower()]
     so = order_field if order_field in fields else fields[0]; sd = "DESC" if order_dir.upper()=="DESC" else "ASC"
     ws = ""; pa = []
     has_del = any(s["field"] == "_deleted" for s in schema)
+    # 筛选条件
+    conds = []
     if hide_deleted and has_del:
-        ws = " WHERE IFNULL(`_deleted`,0) != 1"
+        conds.append("IFNULL(`_deleted`,0) != 1")
+    if filters and isinstance(filters, dict):
+        for fld, vals in filters.items():
+            if fld in fields and vals and isinstance(vals, list) and len(vals):
+                phs = ", ".join(["%s"]*len(vals))
+                conds.append(f"`{fld}` IN ({phs})")
+                pa.extend(vals)
     if search:
-        lc = [f"`{f}` LIKE %s" for f in tf]; pa = [f"%{search}%" for _ in tf]
-        ws = " WHERE "+" OR ".join(lc)
+        lc = [f"`{f}` LIKE %s" for f in tf]; pa.extend([f"%{search}%" for _ in tf])
+        conds.append("("+" OR ".join(lc)+")")
+    if conds:
+        ws = " WHERE " + " AND ".join(conds)
     cr = query_one(f"SELECT COUNT(*) AS cnt FROM `{tn}`{ws}", pa); total = cr["cnt"] if cr else 0
-    rows = query(f"SELECT * FROM `{tn}`{ws} ORDER BY `{so}` {sd} LIMIT %s OFFSET %s", pa+[per_page, offset])
+    if per_page == -1:
+        rows = query(f"SELECT * FROM `{tn}`{ws} ORDER BY `{so}` {sd}", pa)
+    else:
+        rows = query(f"SELECT * FROM `{tn}`{ws} ORDER BY `{so}` {sd} LIMIT %s OFFSET %s", pa+[per_page, offset])
     return total, rows
 
 
@@ -81,6 +118,10 @@ def rename_column(tn, old_name, new_name):
     for s in schema:
         if s["field"] == old_name: col_type = s["type"]; break
     if not col_type: raise ValueError(f"字段 {old_name} 不存在")
+    # 检查新名字是否已存在（避免 MySQL Duplicate column name 错误）
+    for s in schema:
+        if s["field"] == new_name:
+            raise ValueError(f"字段 '{new_name}' 已存在，无法重命名")
     nullable = "NULL" if any(s.get("nullable")=="YES" for s in schema if s["field"]==old_name) else "NOT NULL"
     default = ""
     for s in schema:
@@ -197,3 +238,79 @@ def create_table_from_data(headers, rows, tn):
         except: pass
         return False, f"导入失败: {e}"
     finally: conn.close()
+
+
+# ── 数据库整体导出/导入 ─────────────────────────────
+
+def get_create_sql(tn):
+    """获取 CREATE TABLE 语句"""
+    r = query_one(f"SHOW CREATE TABLE `{tn}`")
+    return r.get("Create Table") if r else None
+
+
+def export_all_tables():
+    """导出所有表的结构+数据+配置，返回可 JSON 序列化的 dict"""
+    tables = get_tables()
+    result = []
+    for t in tables:
+        tn = t["name"]
+        create_sql = get_create_sql(tn)
+        if not create_sql:
+            continue
+        pk = get_pk_column(tn) or "id"
+        rows = query(f"SELECT * FROM `{tn}` ORDER BY `{pk}`")
+        # datetime 转字符串
+        serialized = []
+        for row in rows:
+            sr = {}
+            for k, v in row.items():
+                if isinstance(v, (datetime.datetime, datetime.date)):
+                    sr[k] = v.isoformat()
+                elif v is None or isinstance(v, (str, int, float, bool)):
+                    sr[k] = v
+                else:
+                    sr[k] = str(v)
+            serialized.append(sr)
+        result.append({
+            "name": tn,
+            "create_sql": create_sql,
+            "rows": serialized,
+        })
+    return result
+
+
+def import_tables(table_list, drop_existing=True):
+    """从 export_all_tables 的输出恢复表。
+    返回: (ok_count, fail_count, errors)
+    """
+    ok = 0
+    fail = 0
+    errors = []
+    for td in table_list:
+        tn = td["name"]
+        create_sql = td["create_sql"]
+        rows = td.get("rows", [])
+        try:
+            if drop_existing:
+                # 检查表是否存在
+                existing = get_schema(tn)
+                if existing:
+                    execute(f"DROP TABLE IF EXISTS `{tn}`")
+            # 重建表
+            execute(create_sql)
+            # 逐批插入数据
+            if rows:
+                # 获取新表的字段（排除 id）
+                schema = get_schema(tn)
+                fields = [s["field"] for s in schema if s["field"] != "id"]
+                if fields:
+                    ph = ", ".join(["%s"] * len(fields))
+                    fl = ", ".join([f"`{f}`" for f in fields])
+                    for row in rows:
+                        vals = [row.get(f) for f in fields]
+                        execute(f"INSERT INTO `{tn}` ({fl}) VALUES ({ph})", vals)
+            ok += 1
+        except Exception as e:
+            fail += 1
+            errors.append(f"{tn}: {e}")
+    return ok, fail, errors

@@ -1,0 +1,121 @@
+{
+  "version": 2,
+  "exported_at": "2026-05-28 22:44:30",
+  "database": "road_ledger",
+  "tables": [
+    {
+      "name": "测试",
+      "create_sql": "CREATE TABLE `测试` (\n  `id` int NOT NULL AUTO_INCREMENT,\n  `区县` varchar(255) DEFAULT NULL,\n  `项目名称` text,\n  `项目类型` varchar(255) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+      "rows": [
+        {
+          "id": 2,
+          "区县": "进贤县",
+          "项目名称": "观前-杨家",
+          "项目类型": "路面升级改造"
+        }
+      ]
+    },
+    {
+      "name": "测试2",
+      "create_sql": "CREATE TABLE `测试2` (\n  `id` int NOT NULL AUTO_INCREMENT,\n  `县区` varchar(255) DEFAULT NULL,\n  `乡镇` varchar(255) DEFAULT NULL,\n  `项目名称` varchar(255) DEFAULT NULL,\n  `类型` varchar(255) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+      "rows": [
+        {
+          "id": 2,
+          "县区": "进贤县",
+          "乡镇": "池溪镇",
+          "项目名称": "观前-杨家",
+          "类型": "路面升级改造"
+        }
+      ]
+    },
+    {
+      "name": "测试_测试2_汇总",
+      "create_sql": "CREATE TABLE `测试_测试2_汇总` (\n  `id` int NOT NULL AUTO_INCREMENT,\n  `项目名称` text,\n  `县区` text,\n  `项目类型` text,\n  `乡镇` text,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+      "rows": [
+        {
+          "id": 2,
+          "项目名称": "观前-杨家",
+          "县区": "进贤县",
+          "项目类型": "路面升级改造",
+          "乡镇": "池溪镇"
+        }
+      ]
+    }
+  ],
+  "configs": {
+    "key_fields": {
+      "测试2": "项目名称",
+      "测试": "项目名称",
+      "汇总结果": "项目编号",
+      "测试_测试2_汇总": "项目名称"
+    },
+    "mappings": [
+      {
+        "kf": "项目名称",
+        "ps": [
+          {
+            "s": "县区",
+            "t": "区县"
+          },
+          {
+            "s": "项目名称",
+            "t": "项目名称"
+          },
+          {
+            "s": "类型",
+            "t": "项目类型"
+          }
+        ],
+        "st": "测试2",
+        "tt": "测试"
+      },
+      {
+        "kf": "项目名称",
+        "ps": [
+          {
+            "s": "项目名称",
+            "t": "项目名称"
+          },
+          {
+            "s": "区县",
+            "t": "县区"
+          },
+          {
+            "s": "项目类型",
+            "t": "项目类型"
+          }
+        ],
+        "st": "测试",
+        "tt": "测试_测试2_汇总"
+      },
+      {
+        "kf": "项目名称",
+        "ps": [
+          {
+            "s": "项目名称",
+            "t": "项目名称"
+          },
+          {
+            "s": "县区",
+            "t": "县区"
+          },
+          {
+            "s": "乡镇",
+            "t": "乡镇"
+          }
+        ],
+        "st": "测试2",
+        "tt": "测试_测试2_汇总"
+      }
+    ],
+    "groups": [
+      {
+        "name": "测试组",
+        "tables": [
+          "测试表",
+          "测试表2"
+        ]
+      }
+    ]
+  }
+}

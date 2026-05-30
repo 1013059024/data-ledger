@@ -3,7 +3,7 @@
 import os, sys, json, base64, urllib.request, ssl
 from datetime import datetime
 
-REPO_DIR = r"E:\data\road-ledger-main\road-ledger-main"
+REPO_DIR = r"E:\reasonix-data\projects\road-ledger"
 OWNER = "1013059024"
 REPO = "road-ledger"
 BRANCH = "main"

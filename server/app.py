@@ -4,7 +4,7 @@
 import os, json, uuid, tempfile, re, datetime
 from flask import Flask, jsonify, render_template, request, send_file
 from config import FLASK_SECRET, DB_CONFIG
-from db import get_tables, get_schema, get_page, get_pk_column, create_empty_table, create_table_from_data, drop_table, rename_table, update_cell, rename_column, query_one, query, execute
+from db import get_tables, get_schema, get_page, get_pk_column, create_empty_table, create_table_from_data, drop_table, rename_table, update_cell, rename_column, query_one, query, execute, distinct_values
 
 app = Flask(__name__)
 app.secret_key = FLASK_SECRET
@@ -48,6 +48,19 @@ def _save_kf(kf):
 
 
 # ── 自动备份 ──────────────────────────────────────────
+def _to_json_safe(v):
+    """将不可 JSON 序列化的类型转为 float"""
+    if v is None: return None
+    if isinstance(v, (datetime.date, datetime.datetime)): return v.isoformat()
+    if isinstance(v, (int, float)): return v
+    if isinstance(v, decimal.Decimal): return float(v)
+    try:
+        json.dumps(v)
+        return v
+    except: return str(v)
+
+import decimal
+
 def _backup_table(table_name):
     """删表前自动备份到 _backup/ 目录"""
     try:
@@ -59,16 +72,20 @@ def _backup_table(table_name):
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         safe = re.sub(r'[\\/:*?"<>|]', '_', table_name)
         path = os.path.join(_BACKUP_DIR, f"{safe}_{ts}.json")
-        with open(path, "w", encoding="utf-8") as f:
+        # 备份到临时文件再重命名，避免写一半崩溃留残文件
+        tmp_path = path + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump({
                 "table": table_name,
                 "backup_at": ts,
                 "schema": schema,
-                "rows": [{k: str(v) if isinstance(v, (datetime.date, datetime.datetime)) else v
-                          for k, v in row.items()} for row in rows]
+                "rows": [{k: _to_json_safe(v) for k, v in row.items()} for row in rows]
             }, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, path)
     except Exception as e:
         print(f"[backup] {table_name} 备份失败: {e}")
+        try: os.unlink(tmp_path)
+        except: pass
 
 
 def _save_table_manifest():
@@ -302,6 +319,103 @@ def api_hide_row(table_name, row_id):
     except Exception as e:
         return jsonify({"code": 1, "msg": f"隐藏失败: {e}"})
 
+
+@app.route("/api/table/<table_name>/rows/hide", methods=["POST"])
+def api_hide_rows(table_name):
+    """批量隐藏多行"""
+    d = request.get_json()
+    ids = d.get("ids", [])
+    if not ids: return jsonify({"code": 1, "msg": "请指定要隐藏的行"})
+    try:
+        schema = get_schema(table_name)
+        if not any(s["field"] == "_deleted" for s in schema):
+            execute(f"ALTER TABLE `{table_name}` ADD COLUMN `_deleted` TINYINT DEFAULT 0")
+        ph = ",".join(["%s"] * len(ids))
+        execute(f"UPDATE `{table_name}` SET `_deleted`=1 WHERE `id` IN ({ph})", ids)
+        return jsonify({"code": 0, "msg": f"已隐藏 {len(ids)} 行"})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"批量隐藏失败: {e}"})
+
+
+@app.route("/api/table/<table_name>/rows/unhide", methods=["POST"])
+def api_unhide_rows(table_name):
+    """恢复隐藏的行"""
+    d = request.get_json()
+    ids = d.get("ids", [])
+    try:
+        if ids:
+            ph = ",".join(["%s"] * len(ids))
+            execute(f"UPDATE `{table_name}` SET `_deleted`=0 WHERE `id` IN ({ph})", ids)
+        else:
+            execute(f"UPDATE `{table_name}` SET `_deleted`=0 WHERE `_deleted`=1")
+        return jsonify({"code": 0, "msg": "已恢复"})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"恢复失败: {e}"})
+
+
+@app.route("/api/table/<table_name>/hidden-count", methods=["GET"])
+def api_hidden_count(table_name):
+    try:
+        schema = get_schema(table_name)
+        has_del = any(s["field"] == "_deleted" for s in schema)
+        if not has_del: return jsonify({"code": 0, "data": {"count": 0}})
+        r = query_one(f"SELECT COUNT(*) AS cnt FROM `{table_name}` WHERE IFNULL(`_deleted`,0)=1")
+        return jsonify({"code": 0, "data": {"count": r["cnt"] if r else 0}})
+    except:
+        return jsonify({"code": 0, "data": {"count": 0}})
+
+
+@app.route("/api/table/<table_name>/hidden-rows", methods=["GET"])
+def api_hidden_rows(table_name):
+    try:
+        schema = get_schema(table_name)
+        has_del = any(s["field"] == "_deleted" for s in schema)
+        if not has_del: return jsonify({"code": 0, "data": []})
+        rows = query(f"SELECT * FROM `{table_name}` WHERE IFNULL(`_deleted`,0)=1")
+        return jsonify({"code": 0, "data": rows})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": str(e)})
+
+
+# ── 列隐藏 ──────────────────────────────────────────
+_HIDDEN_COL_FILE = os.path.join(os.path.dirname(__file__), "_hidden_columns.json")
+def _load_hidden_cols():
+    try:
+        if os.path.exists(_HIDDEN_COL_FILE):
+            with open(_HIDDEN_COL_FILE, encoding="utf-8") as f: return json.load(f) or {}
+        return {}
+    except: return {}
+def _save_hidden_cols(d):
+    with open(_HIDDEN_COL_FILE, "w", encoding="utf-8") as f: json.dump(d, f, ensure_ascii=False, indent=2)
+
+@app.route("/api/table/<table_name>/column/hide", methods=["POST"])
+def api_hide_column(table_name):
+    d = request.get_json(); cols = d.get("columns", [])
+    hc = _load_hidden_cols()
+    if table_name not in hc: hc[table_name] = []
+    for c in cols:
+        if c not in hc[table_name]: hc[table_name].append(c)
+    _save_hidden_cols(hc)
+    return jsonify({"code": 0, "msg": f"已隐藏 {len(cols)} 列"})
+
+@app.route("/api/table/<table_name>/column/unhide", methods=["POST"])
+def api_unhide_column(table_name):
+    d = request.get_json(); cols = d.get("columns", [])
+    hc = _load_hidden_cols()
+    if table_name in hc:
+        if cols:
+            hc[table_name] = [c for c in hc[table_name] if c not in cols]
+        else:
+            del hc[table_name]
+        _save_hidden_cols(hc)
+    return jsonify({"code": 0, "msg": "已恢复"})
+
+@app.route("/api/table/<table_name>/hidden-cols", methods=["GET"])
+def api_hidden_cols(table_name):
+    hc = _load_hidden_cols()
+    return jsonify({"code": 0, "data": hc.get(table_name, [])})
+
+
 @app.route("/api/table/<table_name>/column", methods=["POST"])
 def api_add_column(table_name):
     """插入空列（after 指定在某列之后）"""
@@ -376,6 +490,22 @@ def api_delete_column(table_name, column_name):
         return jsonify({"code": 0, "msg": f"列 `{column_name}` 已删除"})
     except Exception as e:
         return jsonify({"code": 1, "msg": f"删除失败: {e}"})
+
+@app.route("/api/table/<table_name>/column/<column_name>/values")
+def api_column_values(table_name, column_name):
+    """获取某列的所有唯一值（用于筛选器），支持级联 filters"""
+    s = request.args.get("search", "", type=str)
+    filters_json = request.args.get("filters", default=None, type=str)
+    filters = None
+    if filters_json:
+        try: filters = json.loads(filters_json)
+        except: pass
+    try:
+        vals = distinct_values(table_name, column_name, s, filters)
+        return jsonify({"code": 0, "data": vals})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": str(e)})
+
 
 @app.route("/api/table/<table_name>/lookup")
 def api_lookup(table_name):
@@ -509,6 +639,11 @@ def api_export_table(table_name):
 
 @app.route("/api/table/<table_name>", methods=["PATCH"])
 def api_update_cell(table_name):
+    """更新单元格
+    PATCH /api/table/<table_name>
+    参数: {"id": row_id, "field": "列名", "value": "新值"}
+    自动同步到映射表中同关键字段值的记录。
+    """
     d = request.get_json()
     if not d: return jsonify({"code": 1, "msg": "请求为空"})
     row_id, field, value = d.get("id"), d.get("field"), d.get("value")
@@ -567,16 +702,22 @@ def api_table(table_name):
     s = get_schema(table_name)
     if not s: return jsonify({"code": 1, "msg": f"表 {table_name} 不存在"})
     p = request.args.get("page", 1, type=int)
-    total, rows = get_page(table_name, p, 50,
+    pp = request.args.get("per_page", 50, type=int)
+    filters_json = request.args.get("filters", default=None, type=str)
+    filters = None
+    if filters_json:
+        try: filters = json.loads(filters_json)
+        except: pass
+    total, rows = get_page(table_name, p, pp,
         request.args.get("search", "", type=str),
         request.args.get("order_field", default=None, type=str),
-        request.args.get("order_dir", default="asc", type=str), hide_deleted=True)
+        request.args.get("order_dir", default="asc", type=str), hide_deleted=True, filters=filters)
     r = query_one("SELECT TABLE_COMMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s", (DB_CONFIG["database"], table_name))
     comment = r["TABLE_COMMENT"] if r else ""
     s = [c for c in s if c["field"] != "_deleted"]
     rows = [{k:v for k,v in row.items() if k != "_deleted"} for row in rows]
     return jsonify({"code": 0, "data": {"name": table_name, "comment": comment, "schema": s,
-        "pk": get_pk_column(table_name), "total": total, "page": p, "per_page": 50, "rows": _serialize_rows(rows)}})
+        "pk": get_pk_column(table_name), "total": total, "page": p, "per_page": pp, "rows": _serialize_rows(rows)}})
 
 
 # ========== 字段映射 API ==========
@@ -1091,6 +1232,65 @@ def api_aggregate_create():
         return jsonify({"code": 1, "msg": f"创建汇总表失败: {str(e)}"})
 
 
+# ========== 单表分类汇总 ==========
+
+@app.route("/api/table/<table_name>/group-summary", methods=["POST"])
+def api_group_summary(table_name):
+    """按指定字段分组汇总，结果存为新表
+    POST /api/table/<table_name>/group-summary
+    参数: {"group_field": "分组字段", "aggregations": [{"field": "字段", "type": "count|sum", "alias": "别名"}], "title": "新表名"}
+    """
+    d = request.get_json()
+    gf = (d.get("group_field") or "").strip()
+    aggs = d.get("aggregations") or d.get("aggs") or []  # [{field, type: "count"|"sum", alias}]
+    title = (d.get("title") or "").strip()
+    if not gf: return jsonify({"code": 1, "msg": "请选择分组字段"})
+    if not aggs: return jsonify({"code": 1, "msg": "请添加至少一个汇总项"})
+    schema = get_schema(table_name)
+    fields = {s["field"]: s["type"] for s in schema}
+    if gf not in fields: return jsonify({"code": 1, "msg": f"分组字段 '{gf}' 不在表中"})
+    # 构建 SQL
+    selects = [f"`{gf}`"]
+    col_defs = [{"name": gf, "type": "VARCHAR(255)"}]
+    agg_headers = [gf]
+    for a in aggs:
+        fld = (a.get("field") or "").strip()
+        tp = (a.get("type") or "count").strip().lower()
+        alias = (a.get("alias") or f"{fld}_{tp}").strip()
+        if fld not in fields: return jsonify({"code": 1, "msg": f"汇总字段 '{fld}' 不在表中"})
+        if tp == "count":
+            selects.append(f"COUNT(`{fld}`) AS `{alias}`")
+            col_defs.append({"name": alias, "type": "INT"})
+        elif tp == "sum":
+            selects.append(f"COALESCE(SUM(`{fld}`),0) AS `{alias}`")
+            col_defs.append({"name": alias, "type": "DECIMAL(15,2)"})
+        else:
+            return jsonify({"code": 1, "msg": f"不支持的汇总类型 '{tp}'，仅支持 count/sum"})
+        agg_headers.append(alias)
+    sql = f"SELECT {', '.join(selects)} FROM `{table_name}` GROUP BY `{gf}` ORDER BY `{gf}`"
+    rows = query(sql)
+    if rows is None: return jsonify({"code": 1, "msg": "查询失败"})
+    # 建新表
+    tn = _safe_tablename(title) if title else f"分类汇总_{uuid.uuid4().hex[:6]}"
+    # 先建空表
+    ok, msg = create_empty_table(tn, columns=col_defs)
+    if not ok: return jsonify({"code": 1, "msg": msg})
+    # 插入数据
+    placeholders = ", ".join(["%s"] * len(agg_headers))
+    col_names = ", ".join([f"`{h}`" for h in agg_headers])
+    try:
+        for row in rows:
+            rv = [row.get(h) if isinstance(row, dict) else row[i] for i, h in enumerate(agg_headers)]
+            execute(f"INSERT INTO `{tn}` ({col_names}) VALUES ({placeholders})", rv)
+    except Exception as e:
+        execute(f"DROP TABLE IF EXISTS `{tn}`")
+        return jsonify({"code": 1, "msg": f"写入数据失败: {e}"})
+    db_execute(f"ALTER TABLE `{tn}` COMMENT = %s", (title or f"按{gf}分类汇总",))
+    _save_table_manifest()
+    n = len(rows)
+    return jsonify({"code": 0, "msg": f"分类汇总表创建成功，共 {n} 条记录", "table_name": tn})
+
+
 # ========== 上传 ==========
 
 # ========== 备份与恢复 ==========
@@ -1104,15 +1304,19 @@ def api_backup_list():
         for fn in os.listdir(_BACKUP_DIR):
             if fn.endswith(".json") and fn != "_manifest.json":
                 path = os.path.join(_BACKUP_DIR, fn)
-                with open(path, encoding="utf-8") as f:
-                    meta = json.load(f)
-                files.append({
-                    "filename": fn,
-                    "table": meta.get("table", fn),
-                    "backup_at": meta.get("backup_at", ""),
-                    "rows": len(meta.get("rows", [])),
-                    "size": os.path.getsize(path)
-                })
+                try:
+                    with open(path, encoding="utf-8") as f:
+                        meta = json.load(f)
+                    files.append({
+                        "filename": fn,
+                        "table": meta.get("table", fn),
+                        "backup_at": meta.get("backup_at", ""),
+                        "rows": len(meta.get("rows", [])),
+                        "size": os.path.getsize(path)
+                    })
+                except:
+                    # 跳过损坏的备份文件
+                    continue
         files.sort(key=lambda x: x["backup_at"], reverse=True)
         return jsonify({"code": 0, "data": files, "manifest_exists": os.path.exists(os.path.join(_BACKUP_DIR, "_manifest.json"))})
     except Exception as e:
@@ -1159,6 +1363,93 @@ def api_backup_restore():
         return jsonify({"code": 1, "msg": f"恢复失败: {str(e)}"})
 
 
+@app.route("/api/backup/delete", methods=["POST"])
+def api_backup_delete():
+    """删除一个或多个备份文件"""
+    d = request.get_json()
+    filenames = d.get("filenames", [])
+    if not filenames: return jsonify({"code": 1, "msg": "请指定要删除的备份文件"})
+    deleted = 0
+    for fn in filenames:
+        path = os.path.join(_BACKUP_DIR, fn)
+        try:
+            if os.path.exists(path) and fn.endswith(".json"):
+                os.unlink(path)
+                deleted += 1
+        except: pass
+    return jsonify({"code": 0, "msg": f"已删除 {deleted} 个备份文件"})
+
+
+# ========== 数据库整体导出/导入 ==========
+
+@app.route("/api/database/export", methods=["GET"])
+def api_db_export():
+    """导出整个数据库为单一 JSON 文件"""
+    try:
+        from db import export_all_tables
+        data = {
+            "version": 2,
+            "exported_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "database": "road_ledger",
+            "tables": export_all_tables(),
+            "configs": {
+                "key_fields": _load_kf(),
+                "mappings": _load_m(),
+                "groups": _load_g(),
+            }
+        }
+        from io import BytesIO
+        buf = BytesIO()
+        buf.write(json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8"))
+        buf.seek(0)
+        filename = f"农村公路台账_备份_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        return send_file(buf, download_name=filename, as_attachment=True,
+                        mimetype="application/json")
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"导出失败: {str(e)}"})
+
+
+@app.route("/api/database/import", methods=["POST"])
+def api_db_import():
+    """从 JSON 文件导入恢复整个数据库"""
+    file = request.files.get("file")
+    if not file or file.filename == "":
+        return jsonify({"code": 1, "msg": "请选择文件"})
+    if not file.filename.endswith(".json"):
+        return jsonify({"code": 1, "msg": "请选择 .json 备份文件"})
+    try:
+        content = file.read().decode("utf-8")
+        data = json.loads(content)
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"文件解析失败: {e}"})
+
+    if not isinstance(data, dict) or "tables" not in data:
+        return jsonify({"code": 1, "msg": "无效的备份文件格式"})
+
+    from db import import_tables
+    ok, fail, errors = import_tables(data["tables"], drop_existing=True)
+
+    # 恢复配置
+    if "configs" in data:
+        cfg = data["configs"]
+        if "key_fields" in cfg and isinstance(cfg["key_fields"], dict):
+            _save_kf(cfg["key_fields"])
+        if "mappings" in cfg and isinstance(cfg["mappings"], list):
+            _save_m(cfg["mappings"])
+        if "groups" in cfg and isinstance(cfg["groups"], list):
+            _save_g(cfg["groups"])
+
+    _save_table_manifest()
+
+    msg = f"成功恢复 {ok} 张表"
+    if fail:
+        msg += f"，{fail} 张表失败"
+    result = {"code": 0, "msg": msg, "ok": ok, "fail": fail}
+    if errors:
+        result["errors"] = errors
+    return jsonify(result)
+
+
 @app.route("/api/upload/parse", methods=["POST"])
 def api_upload_parse():
     file = request.files.get("file")
@@ -1176,11 +1467,13 @@ def api_upload_parse():
                 if len(ne) <= 2 and ne and len(str(ne[0])) > 2 and len([c for c in raw[1] if c is not None and str(c).strip()]) > 2:
                     dt = str(ne[0]).strip(); hr = 2
             _upload_cache[sid] = {"path": tmp.name, "type": "csv", "filename": file.filename,
-                "sheets": {"Sheet1": {"raw_rows": raw}}, "current_sheet": "Sheet1", "header_rows": hr}
+                "sheets": {"Sheet1": {"raw_rows": raw}}, "current_sheet": "Sheet1",
+                "header_row_start": 1, "header_row_end": hr}
             _recalc(sid); s = _upload_cache[sid]["sheets"]["Sheet1"]
             return jsonify({"code": 0, "data": {"session_id": sid, "sheets": ["Sheet1"],
                 "filename": file.filename, "detected_title": dt,
-                "headers": s["headers"], "total_rows": len(s["rows"]), "preview": s["rows"][:5], "header_rows": hr}})
+                "headers": s["headers"], "total_rows": len(s["rows"]), "preview": s["rows"][:5],
+                "header_row_start": 1, "header_row_end": hr}})
         else:
             _upload_cache[sid] = {"path": tmp.name, "type": "excel", "filename": file.filename}
             ns, ra = _parse_excel_raw(tmp.name)
@@ -1190,11 +1483,13 @@ def api_upload_parse():
                 if len(ne) <= 2 and ne and len(str(ne[0])) > 2 and len([c for c in ra[0][1] if c is not None and str(c).strip()]) > 2:
                     dt = str(ne[0]).strip(); hr = 2
             _upload_cache[sid]["sheets"] = {n: {"raw_rows": r} for n, r in zip(ns, ra)}
-            _upload_cache[sid]["current_sheet"] = ns[0]; _upload_cache[sid]["header_rows"] = hr
+            _upload_cache[sid]["current_sheet"] = ns[0];
+            _upload_cache[sid]["header_row_start"] = 1; _upload_cache[sid]["header_row_end"] = hr
             _recalc(sid); s = _upload_cache[sid]["sheets"][ns[0]]
             return jsonify({"code": 0, "data": {"session_id": sid, "sheets": ns,
                 "filename": file.filename, "detected_title": dt,
-                "headers": s["headers"], "total_rows": len(s["rows"]), "preview": s["rows"][:5], "header_rows": hr}})
+                "headers": s["headers"], "total_rows": len(s["rows"]), "preview": s["rows"][:5],
+                "header_row_start": 1, "header_row_end": hr}})
     except Exception as e:
         try: os.unlink(tmp.name)
         except: pass
@@ -1213,17 +1508,23 @@ def api_upload_select_sheet():
 
 @app.route("/api/upload/set_header_rows", methods=["POST"])
 def api_upload_set_header_rows():
-    d = request.get_json(); sid, n = d.get("session_id"), d.get("header_rows", 1)
+    d = request.get_json(); sid = d.get("session_id")
     if sid not in _upload_cache: return jsonify({"code": 1, "msg": "过期"})
-    _upload_cache[sid]["header_rows"] = n; _recalc(sid)
+    start = int(d.get("header_row_start", 1))
+    end = int(d.get("header_row_end", start))
+    _upload_cache[sid]["header_row_start"] = max(1, start)
+    _upload_cache[sid]["header_row_end"] = max(start, end)
+    _recalc(sid)
     s = _upload_cache[sid]["sheets"][_upload_cache[sid]["current_sheet"]]
     return jsonify({"code": 0, "data": {"headers": s["headers"], "total_rows": len(s["rows"]), "preview": s["rows"][:5]}})
 
 
 def _recalc(sid):
     c = _upload_cache[sid]; sn = c["current_sheet"]; raw = c["sheets"][sn]["raw_rows"]
-    n = max(1, min(c["header_rows"], len(raw)))
-    hrows = [list(r) for r in raw[:n]]; drows = raw[n:]
+    rs = max(1, min(c.get("header_row_start", 1), len(raw)))
+    re = max(rs, min(c.get("header_row_end", 1), len(raw)))
+    n = re - rs + 1
+    hrows = [list(r) for r in raw[rs-1:re]]; drows = raw[re:]
     ncols = max((len(r) for r in hrows), default=0)
     if n >= 1:
         row = hrows[0]; carry = ""
@@ -1275,8 +1576,18 @@ def api_upload_import():
     for row in rows:
         v = row[ki_ah] if ki_ah < len(row) else None
         if v is not None and str(v).strip()!="": flt.append([row[i] for i in ui])
-    if not flt: _cleanup(sid); return jsonify({"code": 1, "msg": "过滤后无数据"})
     tn = _safe_tablename(title) if title else f"imported_{uuid.uuid4().hex[:6]}"
+    if not flt:
+        # 无数据行 → 创建空表（只有字段名，没有数据）
+        from db import create_empty_table as cet
+        columns = [{"name": h, "type": "VARCHAR(255)"} for h in uh]
+        ok, msg = cet(tn, columns=columns)
+        _cleanup(sid)
+        if ok:
+            db_execute(f"ALTER TABLE `{tn}` COMMENT = %s", (title or tn,))
+            _save_table_manifest()
+            msg += f"（空表，已建 {len(uh)} 个字段）"
+        return jsonify({"code": 0 if ok else 1, "msg": msg, "table_name": tn})
     ok, msg = create_table_from_data(uh, flt, tn); _cleanup(sid)
     if ok:
         db_execute(f"ALTER TABLE `{tn}` COMMENT = %s", (title or tn,))
@@ -1298,29 +1609,44 @@ def _parse_csv(path):
     return ([h.strip() for h in rows[0]], [row[:len(rows[0])] for row in rows[1:]]) if rows else ([],[])
 
 
+def _has_data(rows):
+    """检查 sheet 是否有至少一行有效数据"""
+    for row in rows:
+        for cell in row:
+            if cell is not None and str(cell).strip():
+                return True
+    return False
+
 def _parse_excel_raw(path):
     ext = os.path.splitext(path)[1].lower()
     if ext == ".xls":
         import xlrd; wb = xlrd.open_workbook(path); ns = wb.sheet_names()
         ra = [[[ws.cell_value(r,c) for c in range(ws.ncols)] for r in range(ws.nrows)] for ws in [wb.sheet_by_name(n) for n in ns]]
-        return ns, ra
+        pairs = [(n, r) for n, r in zip(ns, ra) if _has_data(r)]
+        return [p[0] for p in pairs], [p[1] for p in pairs]
     elif ext == ".et":
-        # .et = WPS 表格格式，先后尝试 openpyxl / xlrd
         try:
             from openpyxl import load_workbook
             wb = load_workbook(filename=path, read_only=True); ns = wb.sheetnames
             ra = [list(ws.iter_rows(values_only=True)) for ws in [wb[n] for n in ns]]
-            wb.close(); return ns, [list(r) for r in ra]
+            wb.close()
+            ra2 = [list(r) for r in ra]
+            pairs = [(n, r) for n, r in zip(ns, ra2) if _has_data(r)]
+            return [p[0] for p in pairs], [p[1] for p in pairs]
         except:
             import xlrd
             wb = xlrd.open_workbook(path); ns = wb.sheet_names()
             ra = [[[ws.cell_value(r,c) for c in range(ws.ncols)] for r in range(ws.nrows)] for ws in [wb.sheet_by_name(n) for n in ns]]
-            return ns, ra
+            pairs = [(n, r) for n, r in zip(ns, ra) if _has_data(r)]
+            return [p[0] for p in pairs], [p[1] for p in pairs]
     else:
         from openpyxl import load_workbook
         wb = load_workbook(filename=path, read_only=True); ns = wb.sheetnames
         ra = [list(ws.iter_rows(values_only=True)) for ws in [wb[n] for n in ns]]
-        wb.close(); return ns, [list(r) for r in ra]
+        wb.close()
+        ra2 = [list(r) for r in ra]
+        pairs = [(n, r) for n, r in zip(ns, ra2) if _has_data(r)]
+        return [p[0] for p in pairs], [p[1] for p in pairs]
 
 
 def _serialize_rows(rows):
