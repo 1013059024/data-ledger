@@ -246,6 +246,22 @@ def api_rename_column(table_name):
     except Exception as e: return jsonify({"code": 1, "msg": str(e)})
 
 
+@app.route("/api/table/<table_name>/dedup", methods=["POST"])
+def api_dedup(table_name):
+    """对关键字段查重，自动删除重复记录（保留ID最小的）"""
+    kf = _load_kf().get(table_name, "")
+    if not kf:
+        return jsonify({"code": 1, "msg": "请先设置关键字段"})
+    schema = get_schema(table_name)
+    if kf not in [s["field"] for s in schema]:
+        return jsonify({"code": 1, "msg": f"字段 `{kf}` 已不存在"})
+    pk = get_pk_column(table_name) or "id"
+    try:
+        deleted = execute(f"DELETE t1 FROM `{table_name}` t1 INNER JOIN `{table_name}` t2 WHERE t1.`{kf}`=t2.`{kf}` AND t1.`{pk}`>t2.`{pk}`")
+        return jsonify({"code": 0, "msg": f"已删除 {deleted} 条重复记录"})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"去重失败: {e}"})
+
 @app.route("/api/table/<table_name>/row", methods=["POST"])
 def api_add_row(table_name):
     """插入一条空记录"""
@@ -390,7 +406,8 @@ def api_hidden_rows(table_name):
             rid = r["id"]
             cnt = query_one(f"SELECT COUNT(*) AS c FROM `{table_name}` WHERE IFNULL(`_deleted`,0) NOT IN (1,2) AND `id`<%s", (rid,))
             r["_seq"] = (cnt["c"] if cnt else 0) + 1
-        return jsonify({"code": 0, "data": rows})
+        kf = _load_kf().get(table_name, "")
+        return jsonify({"code": 0, "data": rows, "key_field": kf})
     except Exception as e:
         return jsonify({"code": 1, "msg": str(e)})
 
@@ -504,11 +521,15 @@ def api_add_column(table_name):
 
 @app.route("/api/table/<table_name>/column/<column_name>/type", methods=["PATCH"])
 def api_set_column_type(table_name, column_name):
-    """修改列数据类型"""
+    """修改列数据类型（先清洗空串，再转换）"""
     d = request.get_json(); new_type = (d or {}).get("type","").strip()
     if not new_type: return jsonify({"code": 1, "msg": "类型不能为空"})
     if column_name.lower() == "id": return jsonify({"code": 1, "msg": "id 列不允许修改"})
     try:
+        # 如果是数值类型，先清洗非数字值，避免 "Data truncated" 错误
+        nt_upper = new_type.upper()
+        if any(kw in nt_upper for kw in ("DECIMAL", "INT", "DOUBLE", "FLOAT", "NUMERIC", "BIGINT", "SMALLINT", "TINYINT")):
+            execute(f"UPDATE `{table_name}` SET `{column_name}`=NULL WHERE `{column_name}`='' OR `{column_name}` IS NULL")
         execute(f"ALTER TABLE `{table_name}` MODIFY COLUMN `{column_name}` {new_type}")
         return jsonify({"code": 0, "msg": f"已修改为 {new_type}"})
     except Exception as e:
@@ -644,10 +665,45 @@ def api_export_table(table_name):
         if not schema: return jsonify({"code": 1, "msg": "表不存在"})
         pk = get_pk_column(table_name) or "id"
         fields = [s["field"] for s in schema if s["field"] not in (pk, "_deleted")]
-        rows = query(f"SELECT * FROM `{table_name}` ORDER BY `{pk}`")
+        # 排除隐藏列
+        hidden_cols = _load_hidden_cols().get(table_name, [])
+        if hidden_cols:
+            fields = [f for f in fields if f not in hidden_cols]
+        if not fields:
+            return jsonify({"code": 1, "msg": "没有可导出的列"})
+        # 读取筛选条件（从 URL query string），仅导出筛选后的行
+        filters_json = request.args.get("filters", "")
+        order_field = request.args.get("order_field", default=None, type=str)
+        order_dir = request.args.get("order_dir", default="asc", type=str)
+        # 构建 WHERE
+        has_where = False; where_parts = []; params = []; schema_fields = {s["field"] for s in schema}
+        if filters_json:
+            try:
+                filters = json.loads(filters_json)
+                for fld, vals in filters.items():
+                    if fld in schema_fields and vals and len(vals) > 0:
+                        ph = ",".join(["%s"]*len(vals))
+                        where_parts.append(f"`{fld}` IN ({ph})")
+                        params.extend(vals)
+            except: pass
+        if where_parts:
+            has_where = True
+        # 构建 ORDER BY
+        order_sql = f"ORDER BY `{pk}`"
+        if order_field and order_field in schema_fields:
+            dir_sql = "DESC" if order_dir == "desc" else "ASC"
+            order_sql = f"ORDER BY `{order_field}` {dir_sql}, `{pk}`"
+        # 执行查询
+        if has_where:
+            where = " AND ".join(where_parts)
+            rows = query(f"SELECT * FROM `{table_name}` WHERE {where} {order_sql}", params)
+        else:
+            rows = query(f"SELECT * FROM `{table_name}` {order_sql}")
+        # 标题：使用表注释（comment），没有则用表名
+        tables = get_tables()
+        table_comment = {t["name"]: t["comment"] for t in tables}.get(table_name, "")
+        title_text = table_comment or table_name
         wb = openpyxl.Workbook(); ws = wb.active; ws.title = (table_name or "sheet")[:31]
-        # 表格标题：与系统预览页保持一致（直接使用 table_name）
-        title_text = table_name
         # ── 公文格式样式 ──────────────────────────────
         title_font   = Font(name="黑体", size=16, bold=True)          # 三号黑体
         hdr_font     = Font(name="黑体", size=10.5, bold=True)         # 五号黑体加粗

@@ -1,5 +1,236 @@
 [
   {
+    "name": "十四五期省级农村公路建设项目完成情况汇总表__县道升级改造",
+    "comment": "十四五期省级农村公路建设项目完成情况汇总表__县道升级改造",
+    "schema": [
+      {
+        "field": "id",
+        "type": "int",
+        "nullable": "NO",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "设区市",
+        "type": "text",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "县_市_区",
+        "type": "text",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "乡镇名称",
+        "type": "text",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "项目名称",
+        "type": "text",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "项目类型",
+        "type": "text",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "建设规模及标准_公里__合计",
+        "type": "double",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "建设规模及标准_公里__一级公路",
+        "type": "double",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "建设规模及标准_公里__二级公路",
+        "type": "double",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "建设规模及标准_公里__三级公路",
+        "type": "double",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "总投资_万元__合计",
+        "type": "double",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "总投资_万元__省级及以上补助资金",
+        "type": "double",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "总投资_万元__市级补助资金",
+        "type": "double",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "总投资_万元__地方自筹资金_万元",
+        "type": "double",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "已拨付资金_万元",
+        "type": "double",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "结存资金金额_万元__小计",
+        "type": "double",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "结存资金金额_万元__财政部门",
+        "type": "double",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "结存资金金额_万元__交通部门",
+        "type": "double",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "路面类型",
+        "type": "text",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "路基宽度_米",
+        "type": "double",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "路面宽度_米",
+        "type": "varchar(255)",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "路线编码",
+        "type": "text",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "起点桩号",
+        "type": "varchar(255)",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "止点桩号",
+        "type": "varchar(255)",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "施工图设计批复文号",
+        "type": "text",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "计划年份",
+        "type": "varchar(255)",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "项目状态_开工时间",
+        "type": "text",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "项目状态_完工时间",
+        "type": "text",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "项目状态___交工时间",
+        "type": "text",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "项目状态",
+        "type": "text",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "下一步整改措施",
+        "type": "text",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "备注",
+        "type": "text",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      }
+    ],
+    "created_at": "2026-05-30T21:40:16.412145"
+  },
+  {
     "name": "十四五期省级农村公路建设项目完成情况汇总表__窄路面拓宽改造",
     "comment": "十四五期省级农村公路建设项目完成情况汇总表__窄路面拓宽改造",
     "schema": [
@@ -117,7 +348,7 @@
       },
       {
         "field": "路面宽度_米",
-        "type": "text",
+        "type": "varchar(255)",
         "nullable": "YES",
         "default": null,
         "comment": ""
@@ -165,8 +396,8 @@
         "comment": ""
       },
       {
-        "field": "建设状态_完工_完工未交工_在建_停工_未开工",
-        "type": "text",
+        "field": "建设状态",
+        "type": "varchar(255)",
         "nullable": "YES",
         "default": null,
         "comment": ""
@@ -193,7 +424,7 @@
         "comment": ""
       }
     ],
-    "created_at": "2026-05-30T17:30:50.643814"
+    "created_at": "2026-05-30T21:40:16.430752"
   },
   {
     "name": "项目总表",
@@ -222,7 +453,7 @@
       },
       {
         "field": "项目名称",
-        "type": "varchar(255)",
+        "type": "text",
         "nullable": "YES",
         "default": null,
         "comment": ""
@@ -271,14 +502,14 @@
       },
       {
         "field": "一级",
-        "type": "varchar(255)",
+        "type": "double",
         "nullable": "YES",
         "default": null,
         "comment": ""
       },
       {
         "field": "二级",
-        "type": "varchar(255)",
+        "type": "double",
         "nullable": "YES",
         "default": null,
         "comment": ""
@@ -306,7 +537,7 @@
       },
       {
         "field": "总投资",
-        "type": "varchar(255)",
+        "type": "double",
         "nullable": "YES",
         "default": null,
         "comment": ""
@@ -320,14 +551,14 @@
       },
       {
         "field": "补助资金总额",
-        "type": "varchar(255)",
+        "type": "double",
         "nullable": "YES",
         "default": null,
         "comment": ""
       },
       {
         "field": "省补合计",
-        "type": "varchar(255)",
+        "type": "double",
         "nullable": "YES",
         "default": null,
         "comment": ""
@@ -383,6 +614,13 @@
       },
       {
         "field": "省奖_市财_日期",
+        "type": "varchar(255)",
+        "nullable": "YES",
+        "default": null,
+        "comment": ""
+      },
+      {
+        "field": "建设状态",
         "type": "varchar(255)",
         "nullable": "YES",
         "default": null,
@@ -445,6 +683,6 @@
         "comment": ""
       }
     ],
-    "created_at": "2026-05-30T17:30:50.662936"
+    "created_at": "2026-05-30T21:40:16.471759"
   }
 ]

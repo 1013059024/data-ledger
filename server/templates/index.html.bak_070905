@@ -4,18 +4,7 @@
 <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
 <meta name="del-token" content="{{ del_token }}">
 <link href="/static/css/style.css" rel="stylesheet">
-<style>.table-bordered td:empty::before{content:"\00a0";display:block;}
-.filter-dropdown{position:fixed;z-index:1060;background:#fff;border:1px solid #ccc;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,0.15);padding:8px;max-height:380px;overflow:hidden;display:flex;flex-direction:column}
-.filter-dropdown-header{display:flex;justify-content:space-between;align-items:center;padding-bottom:6px;border-bottom:1px solid #eee;margin-bottom:6px}
-.filter-dropdown-search{margin-bottom:6px}
-.filter-dropdown-body{overflow-y:auto;flex:1}
-.filter-dropdown-footer{padding-top:6px;border-top:1px solid #eee;margin-top:6px}
-.filter-value-item{display:flex;align-items:center;padding:3px 6px;cursor:pointer;border-radius:3px;gap:4px}
-.filter-value-item:hover{background:#f0f7ff}
-.filter-value-item input[type=checkbox]{margin-right:4px;flex-shrink:0}
-.filter-values{max-height:240px;overflow-y:auto}
-.filter-tag:hover{border-color:#e6a800!important;background:#fff8e1!important}
-</style></head>
+<style>.table-bordered td:empty::before{content:"\00a0";display:block;}</style></head>
 <body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
 <div class="container-fluid">
@@ -23,7 +12,6 @@
 <span class="navbar-text text-white-50 small"><span id="tableCount" class="badge bg-light text-primary">0 张表</span> <span id="saveStatus" class="badge bg-success ms-1" style="cursor:default" title="数据已保存到数据库">✅ 已保存</span></span>
 <div class="ms-auto d-flex gap-2">
 <button class="btn btn-outline-light btn-sm" id="syncBtn">🔗 映射</button>
-<button class="btn btn-outline-light btn-sm" id="dbViewBtn">🗄 数据库</button>
 <button class="btn btn-light btn-sm" id="uploadBtn">📤 导入</button>
 <button class="btn btn-outline-light btn-sm" id="dbBackupBtn">💾 备份</button>
 </div></div></nav>
@@ -40,18 +28,12 @@
 <div class="d-flex gap-2"><input type="text" id="searchInput" class="form-control form-control-sm" placeholder="搜索..." style="width:200px">
 <button class="btn btn-sm btn-outline-warning" id="clearAllFiltersBtn" style="display:none" title="清除所有筛选">🧹 筛选</button>
 <button class="btn btn-sm btn-outline-success" id="exportBtn">📥 导出</button>
-<div class="dropdown d-inline-block" id="colFuncWrap">
-<button class="btn btn-sm btn-outline-secondary dropdown-toggle" id="colFuncBtn">📋 列功能</button>
-<ul id="colFuncMenu" style="display:none;position:absolute;inset:0 0 auto auto;margin:0;padding:4px 0;background:#fff;border:1px solid rgba(0,0,0,0.15);border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,0.15);z-index:1050;max-height:400px;overflow-y:auto;min-width:280px;font-size:13px;list-style:none"></ul></div>
 <button class="btn btn-sm btn-outline-info" id="backfillBtn">📥 补填</button>
-
-<button class="btn btn-sm btn-outline-primary" id="aggregateBtn">📊 多表合一</button>
+<button class="btn btn-sm btn-outline-secondary" id="beautifyBtn">📐 美化</button>
+<button class="btn btn-sm btn-outline-primary" id="aggregateBtn">📊 汇总</button>
 <button class="btn btn-sm btn-outline-primary" id="groupSummaryBtn">📋 分类汇总</button>
-<button class="btn btn-sm btn-outline-danger" id="dedupBtn">🧹 去重</button>
 <button class="btn btn-sm btn-outline-secondary" id="refreshBtn">🔄</button></div></div>
-<div id="filterTags" style="display:none;margin-bottom:6px;padding:4px 0;min-height:28px"></div>
 <div class="table-responsive"><table class="table table-bordered table-hover table-sm" id="dataTable" style="border-collapse:collapse"><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table></div>
-<div id="selectionBar" style="display:none;padding:3px 8px;font-size:12px;color:#666;background:#fafafa;border:1px solid #dee2e6;border-top:0;border-radius:0 0 4px 4px;min-height:22px"><span id="selInfo"></span></div>
 <!-- 筛选下拉面板 -->
 <div id="filterDropdown" class="filter-dropdown" style="display:none">
   <div class="filter-dropdown-header">
@@ -204,15 +186,8 @@
 <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" id="gsConfirmBtn" disabled>生成汇总表</button></div>
 </div></div></div>
 
-<div id="rowMenu" class="context-menu"><div class="context-menu-item" data-action="copy-selection">📋 复制选中区域</div><div class="context-menu-item" data-action="paste-to-selection">📝 粘贴</div><div class="context-menu-item" data-action="clear-selection">🧹 清除内容</div><hr class="my-1"><div class="context-menu-item" data-action="insert">⬇ 插入空行</div><div class="context-menu-item" data-action="view-record">📋 查看数据库记录</div><hr class="my-1"><div class="context-menu-item" data-action="hide-row">👁 从本表隐藏</div><div class="context-menu-item" data-action="table-delete">🗑 从本表删除</div><div class="context-menu-item" data-action="delete-row">🔥 从数据库删除</div></div>
-<div id="colMenu" class="context-menu"><div class="context-menu-info small text-muted px-3 py-1" id="colTypeInfo"></div><div class="context-menu-item" data-action="toggle-key-field">🔑 设为核心字段</div><div class="context-menu-item" data-action="change-type">🔧 修改数据类型</div><div class="context-menu-item" data-action="insert-col">➕ 插入列（右侧）</div><div class="context-menu-item" data-action="reorder-cols">📝 调整字段顺序</div><div class="context-menu-item" data-action="toggle-freeze">❄️ 冻结此列</div><div class="context-menu-item" data-action="set-formula">📐 公式</div><div class="context-menu-item" data-action="delete-col">🗑 删除本列</div></div>
-
-
-<div class="modal fade" id="dvModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
-<div class="modal-header"><h5 class="modal-title" id="dvModalLabel">🗄 数据库总览</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-<div class="modal-body"><div id="dvResult"><div class="text-center py-4"><span class="spinner-border spinner-border-sm"></span> 加载中...</div></div></div>
-<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">关闭</button></div>
-</div></div></div>
+<div id="rowMenu" class="context-menu"><div class="context-menu-item" data-action="insert">⬇ 插入空行</div><div class="context-menu-item" data-action="view-record">📋 查看数据库记录</div><div class="context-menu-item" data-action="hide-row">👁 在本表隐藏</div><div class="context-menu-item" data-action="hide-selected-rows">👁 隐藏已选行</div><div class="context-menu-item" data-action="delete-row">🔥 从数据库删除</div></div>
+<div id="colMenu" class="context-menu"><div class="context-menu-info small text-muted px-3 py-1" id="colTypeInfo"></div><div class="context-menu-item" data-action="toggle-key-field">🔑 设为核心字段</div><div class="context-menu-item" data-action="change-type">🔧 修改数据类型</div><div class="context-menu-item" data-action="hide-col">👁 隐藏本列</div><div class="context-menu-item" data-action="insert-col">➕ 插入列（右侧）</div><div class="context-menu-item" data-action="reorder-cols">📝 调整字段顺序</div><div class="context-menu-item" data-action="delete-col">🗑 删除本列</div></div>
 
 <div class="modal fade" id="dbBackupModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
 <div class="modal-header"><h5 class="modal-title">💾 数据库备份与恢复</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
@@ -297,7 +272,7 @@ function renderSidebar(sn){
             +'<div class="group-body show" id="'+gid+'"></div>');
         var gb=l.find('#'+gid);
         gTables.forEach(function(t){
-            var a=$('<a class="list-group-item list-group-item-action" data-name="'+t.name+'">📄 '+t.name+'</a>');
+            var a=$('<a class="list-group-item list-group-item-action">📄 '+t.name+'</a>');
             a.click(function(){$(".list-group-item").removeClass("active");a.addClass("active");loadTable(t.name);});
             if(t.name===sn){a.addClass("active");loadTable(t.name);}
             gb.append(a);
@@ -309,7 +284,7 @@ function renderSidebar(sn){
             +'<div class="group-body show"></div>');
         var gb=l.find('.group-body:last');
         ungrouped.forEach(function(t){
-            var a=$('<a class="list-group-item list-group-item-action" data-name="'+t.name+'">📄 '+t.name+'</a>');
+            var a=$('<a class="list-group-item list-group-item-action">📄 '+t.name+'</a>');
             a.click(function(){$(".list-group-item").removeClass("active");a.addClass("active");loadTable(t.name);});
             if(t.name===sn){a.addClass("active");loadTable(t.name);}
             gb.append(a);
@@ -386,54 +361,11 @@ $("#groupSaveBtn").click(function(){
         }
     });
 });
-var _frozenCols=[],_sortField=null,_sortDir="asc",_searchKw="";
-var _formulaCols={};
-function applyFrozen(){
-    if(!_frozenCols.length){$("#dataTable .col-frozen").removeClass("col-frozen").css("left","");return;}
-    var left=0;
-    $("#dataTable thead tr:first th").each(function(i){
-        if(i===0){left+=$(this).outerWidth();return;}
-        var fld=$(this).data("field");
-        if(!fld)return;
-        if(_frozenCols.indexOf(fld)>-1){
-            $(this).addClass("col-frozen").css("left",left+"px");
-            var colIdx=i;
-            $("#dataTable tbody tr").each(function(){
-                $(this).children().eq(colIdx).addClass("col-frozen").css("left",left+"px");
-            });
-            left+=$(this).outerWidth();
-        }else{
-            $(this).removeClass("col-frozen").css("left","");
-            var colIdx=i;
-            $("#dataTable tbody tr").each(function(){
-                $(this).children().eq(colIdx).removeClass("col-frozen").css("left","");
-            });
-        }
-    });
-}
-function evalFormula(expr,rowData){
-    try{expr=expr.replace(/\s/g,"");var tokens=expr.match(/([+\-*/()]|[^+\-*/()]+)/g)||[];
-        for(var i=0;i<tokens.length;i++){var t=tokens[i];
-            if(t==='+'||t==='-'||t==='*'||t==='/'||t==='('||t===')') continue;
-            if(/^[\d.]+$/.test(t)) continue;
-            var found=null;
-            for(var f in rowData){if(f.toLowerCase()===t.toLowerCase()){found=rowData[f];break;}
-                var fclean=f.replace(/[^\w\u4e00-\u9fff]/g,'');var tclean=t.replace(/[^\w\u4e00-\u9fff]/g,'');
-                if(fclean===tclean){found=rowData[f];break;}}
-            if(found===null||found===undefined) found=0;
-            tokens[i]=String(Number(found)||0);}
-        var r=Function('"use strict";return ('+tokens.join('')+')')();
-        return isNaN(r)?null:r;
-    }catch(e){return null;}
-}
-function loadTable(n){ct=n;cp=1;_showAllRows=false;$("#emptyState").hide();$("#tableView").show();$.getJSON("/api/table/"+n+"?page=1",function(r){if(!r.code)fp(n,1);});}
+function loadTable(n){ct=n;cp=1;$("#emptyState").hide();$("#tableView").show();$.getJSON("/api/table/"+n+"?page=1",function(r){if(!r.code)fp(n,1);});}
 function fp(n,p){
-    var s=$("#searchInput").val()||"";_searchKw=s;
-    // 退出全部记录模式时立即移除横幅
-    if(!_showAllRows)$("#showAllBanner").remove();
+    var s=$("#searchInput").val()||"";
     var fJson=applyFilters();
-    var params={page:1,per_page:-1,search:s};if(_sortField)params.order_field=_sortField;if(_sortDir)params.order_dir=_sortDir;
-    if(_showAllRows)params.show_all=1;
+    var params={page:p,search:s};
     if(fJson)params.filters=fJson;
     $.getJSON("/api/table/"+n,params,function(r){
         if(!r.code){
@@ -463,12 +395,10 @@ function fp(n,p){
                         e.preventDefault();
                         $.getJSON("/api/table/"+n+"/hidden-rows",function(hrows){
                             if(hrows.code!==0||!hrows.data.length)return;
-                            var kf=hrows.key_field||"";
-                            var mh='<div class="table-responsive" style="max-height:400px"><table class="table table-sm table-bordered"><thead><tr><th>ID</th>'+(kf?'<th>'+kf+'</th>':'')+'<th style="width:60px">操作</th></tr></thead><tbody>';
+                            var mh='<div class="table-responsive" style="max-height:400px"><table class="table table-sm table-bordered"><thead><tr><th>ID</th><th style="width:60px">操作</th></tr></thead><tbody>';
                             hrows.data.forEach(function(row){
                                 var rid=row.id;
-                                var kv=row[kf]!==null&&row[kf]!==undefined?row[kf]:'';
-                                mh+='<tr><td>#'+rid+'</td>'+(kf?'<td>'+kv+'</td>':'')+'<td><button class="btn btn-sm btn-outline-success unhide-row-btn" data-id="'+rid+'">↩ 恢复</button></td></tr>';
+                                mh+='<tr><td>#'+rid+'</td><td><button class="btn btn-sm btn-outline-success unhide-row-btn" data-id="'+rid+'">↩ 恢复</button></td></tr>';
                             });
                             mh+='</tbody></table></div><div class="mt-2"><button class="btn btn-sm btn-success" id="unhideAllRowsBtn">↩ 恢复全部</button></div>';
                             var $modal=$('<div class="modal fade"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">已隐藏的行</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">'+mh+'</div></div></div></div>');
@@ -501,8 +431,6 @@ function fp(n,p){
 
 var _hiddenCols=[];
 var _filters={}; // 列筛选条件 {field: [value1, value2, ...]}
-var _dvModal=null;
-var _showAllRows=false; // 是否显示全部记录（含删除/隐藏）
 function toggleFilter(){}
 function applyFilters(){
     var active={};
@@ -511,63 +439,43 @@ function applyFilters(){
     }
     var cnt=Object.keys(active).length;
     var filtersJson=cnt?JSON.stringify(active):'';
+    // 更新筛选图标状态
+    $('.filter-icon').each(function(){
+        var fld=$(this).data('field');
+        if(active[fld])$(this).html('🔽').addClass('filter-active');
+        else $(this).html('▾').removeClass('filter-active');
+    });
     // 显示/隐藏清除筛选按钮
     if(cnt)$("#clearAllFiltersBtn").show().text('🧹 筛选('+cnt+')');
     else $("#clearAllFiltersBtn").hide();
-    // 更新筛选标签栏
-    var ft=$("#filterTags").empty();
-    if(cnt){
-        for(var fld in active){
-            var vals=active[fld];
-            var display=vals.length>3?vals.slice(0,3).join(', ')+"... 等"+vals.length+"项":vals.join(', ');
-            ft.append('<span class="filter-tag" data-field="'+fld+'" style="display:inline-block;margin:2px 4px;padding:2px 8px;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;font-size:12px;cursor:default">'
-                +'<span class="filter-tag-field fw-bold me-1">'+fld+'</span><span class="filter-tag-vals">'+display+'</span>'
-                +'<span class="filter-tag-remove ms-1" data-field="'+fld+'" style="cursor:pointer;opacity:0.6">✕</span></span>');
-        }
-        ft.show();
-    }else{
-        ft.hide();
-    }
     return filtersJson;
 }
 function applyHiddenCols(){
-    // 先全部显示表头和表体，再隐藏需要隐藏的列
-    $("#tableHead th.col-head").show();
-    $("#tableBody td.editable").show();
-    if(_hiddenCols.length){
-        $("#tableHead th.col-head").each(function(){
-            var fld=$(this).data("field");
-            if(_hiddenCols.indexOf(fld)>=0){$(this).hide();$("#tableBody td.editable[data-field='"+fld+"']").hide();}
-        });
-    }
-}
-
-// ── 列功能菜单眼睛图标点击 ──
-$(document).on("click",".col-func-eye",function(e){
-    e.stopPropagation();
-    var fld=$(this).data("field");
-    if(!fld)return;
-    var idx=_hiddenCols.indexOf(fld);
-    if(idx>=0) _hiddenCols.splice(idx,1);
-    else _hiddenCols.push(fld);
-    // 即时更新菜单中的图标
-    var isHidden=_hiddenCols.indexOf(fld)>=0;
-    $(this).text(isHidden?'🚫':'👁️').toggleClass("text-danger",isHidden).toggleClass("text-muted",!isHidden);
-    // 发请求
-    var url=idx>=0?"/api/table/"+encodeURIComponent(ct)+"/column/unhide":"/api/table/"+encodeURIComponent(ct)+"/column/hide";
-    $.ajax({url:url,type:"POST",contentType:"application/json",
-        data:JSON.stringify({columns:[fld]}),
-        success:function(r){if(r.code===0)applyHiddenCols();else alert(r.msg);}
+    if(!_hiddenCols.length)return;
+    $("#tableHead th.col-head").each(function(){
+        var fld=$(this).data("field");
+        if(_hiddenCols.indexOf(fld)>=0)$(this).hide();
     });
-});
+    // 显示隐藏列提示
+    var $el=$("#tableHead");
+    if(!$el.find(".hidden-col-indicator").length)
+        $el.append('<tr class="hidden-col-indicator"><td colspan="99"><span class="badge bg-warning text-dark small">已隐藏 '+_hiddenCols.length+' 列 <a href="#" class="text-dark fw-bold show-hidden-cols-link">显示</a></span></td></tr>');
+    $el.off("click",".show-hidden-cols-link").on("click",".show-hidden-cols-link",function(e){
+        e.preventDefault();
+        _hiddenCols=[];
+        $("#tableHead th.col-head").show();
+        $(".hidden-col-indicator").remove();
+        $.ajax({url:"/api/table/"+ct+"/column/unhide",type:"POST",contentType:"application/json",
+            data:JSON.stringify({columns:[]}),success:function(){}});
+    });
+}
 
 function markKeyFieldHeader(){
     $("#tableHead th.col-head").each(function(){
         var fld=$(this).data("field");
-        var $name=$(this).find(".col-head-name");
-        var txt=$name.text().replace(/\s*\*?$/,"");
+        var txt=$(this).text().replace(/\s*\*?$/,"");
         if(fld===_currentKf) txt+=" *";
-        $name.text(txt);
+        $(this).text(txt);
     });
     applyHiddenCols(); // 隐藏了列标记后重新应用隐藏
 }
@@ -578,73 +486,32 @@ function render(d){
     $("#tableName").text(d.name);$("#totalRecords").text(d.total+" 条");
     ftypes={};d.schema.forEach(function(c){ftypes[c.field]=c.type.toLowerCase();});
     var h=$("#tableHead").empty(),tr=$("<tr><th>序号</th></tr>");
-    if(_showAllRows)tr.append("<th style='width:80px'>状态</th>");
-    d.schema.forEach(function(c){if(c.field===d.pk)return;if(c.field==='_deleted')return;var fld=c.field;tr.append("<th class='col-head' data-field='"+fld+"' data-type='"+c.type+"' style='cursor:pointer'><span class='col-head-name'>"+fld+"</span></th>");});h.append(tr);
+    d.schema.forEach(function(c){if(c.field===d.pk)return;var fld=c.field;var fIcon=_filters[fld]&&_filters[fld].length?'<span class="filter-icon filter-active" data-field="'+fld+'" style="cursor:pointer;margin-left:4px">🔽</span>':'<span class="filter-icon" data-field="'+fld+'" style="cursor:pointer;margin-left:4px">▾</span>';tr.append("<th class='col-head' data-field='"+fld+"' data-type='"+c.type+"'>"+fld+fIcon+"</th>");});h.append(tr);
     var b=$("#tableBody").empty(),f=d.schema.map(function(c){return c.field}),pk=d.pk||"id";
     if(!d.rows.length){b.append('<tr><td colspan="99" class="text-center text-muted">暂无</td></tr>');return;}
     d.rows.forEach(function(row,i){
-        var rowDel=row._deleted||0;
-        var tr2=$("<tr data-id='"+row[pk]+"' data-deleted='"+rowDel+"'>");
-        if(_showAllRows&&rowDel==1)tr2.addClass("table-warning");
-        if(_showAllRows&&rowDel==2)tr2.addClass("table-danger");
-        tr2.append("<td class='text-muted row-num'>"+((d.page-1)*PP+i+1)+"</td>");
-        if(_showAllRows&&rowDel){
-            if(rowDel==2){
-                tr2.append("<td class='text-nowrap small'><span class='text-danger fw-bold'>🗑 表删除</span> <button class='btn btn-sm btn-outline-success py-0 px-1 restore-deleted' data-id='"+row[pk]+"'>↩ 恢复</button></td>");
-            }else{
-                tr2.append("<td class='text-nowrap small text-warning fw-bold'>👁 隐藏</td>");
-            }
-        }
+        var tr2=$("<tr data-id='"+row[pk]+"'>");tr2.append("<td class='text-muted'>"+((d.page-1)*PP+i+1)+"</td>");
         f.forEach(function(field){
             if(field===pk)return;
-            if(field==='_deleted')return;
             var v=row[field];
             if(v===null||v===undefined)v='';
             else if(typeof v==='object')v=JSON.stringify(v);
             else if(typeof v==='number'&&isFloat(ftypes[field]||""))v=v.toFixed(2);
-            if(_formulaCols[ct]&&_formulaCols[ct][field]){var fv=evalFormula(_formulaCols[ct][field],row);if(fv!==null)v=isFloat(ftypes[field]||"")?fv.toFixed(2):fv;}
-            var dv=String(v),kw=_searchKw;if(kw&&dv)dv=dv.replace(new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),"gi"),function(m){return "<span class='search-hl'>"+m+"</span>";});
-            tr2.append("<td class='editable' data-field='"+field+"' data-val='"+String(row[field]??"").replace(/"/g,"&quot;")+"'>"+dv+"</td>");
+            tr2.append("<td class='editable' data-field='"+field+"' data-val='"+String(row[field]??"").replace(/"/g,"&quot;")+"'>"+v+"</td>");
         });b.append(tr2);
     });
-    // 公文表格美化：自动列宽
-    try{var tbl=document.getElementById("dataTable");
-    if(tbl){tbl.classList.add("table-gongwen");
-        $("#dataTable thead th").each(function(){var mx=0,colIdx=$(this).index();$("#dataTable tbody tr").each(function(){var txt=$(this).children().eq(colIdx).text()||"";if(!txt||txt==="—")return;var cw=0;for(var i=0;i<txt.length;i++){var code=txt.charCodeAt(i);cw+= code>0x4e00?18:(code>0x80?12:7);}if(cw>mx)mx=cw;});var hdr=$(this).text().replace(/[↑↓*]/g,"").trim();var hw=0;for(var i=0;i<hdr.length;i++){var code=hdr.charCodeAt(i);hw+= code>0x4e00?18:(code>0x80?12:7);}if(hw>mx)mx=hw;var w=mx+24;if(w<60)w=60;if(w>300)w=300;$(this).css("width",w+"px").css("min-width",w+"px");});
-    }}catch(ex){}
-    if(_formulaCols[ct]){var batch=[];$("#dataTable tbody tr").each(function(){var rid=$(this).data("id");for(var ff in _formulaCols[ct]){var $td=$(this).find("td.editable[data-field='"+ff+"']");if(!$td.length)continue;var rowData={};$(this).find("td.editable").each(function(){rowData[$(this).data("field")]=$(this).data("val");});var fv=evalFormula(_formulaCols[ct][ff],rowData);if(fv!==null){var old=$td.data("val");if(String(old)!==String(fv))batch.push({table:ct,id:rid,field:ff,value:fv});}}});if(batch.length)$.ajax({url:"/api/table/batch-update",type:"POST",contentType:"application/json",data:JSON.stringify({updates:batch}),async:true});}
-    applyFrozen();
-    // 更新全部记录提示栏
-    updateShowAllBanner();
-    if(_showAllRows){
-        var cnt=d.rows.length;
-        $("#showAllCount").text(cnt);
-    }
+    var tp=Math.max(1,Math.ceil(d.total/PP)),pg=d.page,ul=$("#pageUl").empty();
+    ul.append('<li class="page-item '+(pg<=1?'disabled':'')+'"><a class="page-link" data-p="'+(pg-1)+'">&laquo;</a></li>');if(pg>3)ul.append('<li class="page-item disabled"><span class="page-link">...</span></li>');
+    for(var i=Math.max(1,pg-2);i<=Math.min(tp,pg+2);i++)ul.append('<li class="page-item '+(i==pg?'active':'')+'"><a class="page-link" data-p="'+i+'">'+i+'</a></li>');if(pg<tp-2)ul.append('<li class="page-item disabled"><span class="page-link">...</span></li>');
+    ul.append('<li class="page-item '+(pg>=tp?'disabled':'')+'"><a class="page-link" data-p="'+(pg+1)+'">&raquo;</a></li>');
+    ul.find("a[data-p]").click(function(e){e.preventDefault();var p=parseInt($(this).data("p"));if(p>0&&p<=tp){cp=p;fp(ct,p);}});
+    // 黄金比例：行高 = 列宽 × 0.618
+    try{var tbl=document.getElementById("dataTable");if(tbl){var tw=tbl.offsetWidth;if(tw<10)tw=tbl.parentElement.offsetWidth-20;var nc=document.querySelectorAll("#tableHead th").length;if(nc>0&&tw>10){var cw=tw/nc,rh=Math.round(cw*0.618);rh=Math.max(20,Math.min(120,rh));var c=tbl.querySelectorAll("tbody td");for(var i=0;i<c.length;i++)c[i].style.height=rh+"px";}}}catch(ex){}
 }
 function isFloat(t){return t.indexOf("double")>=0||t.indexOf("float")>=0||t.indexOf("decimal")>=0||t.indexOf("numeric")>=0;}
 var st=null;
 $("#searchInput").on("input",function(){clearTimeout(st);st=setTimeout(function(){if(ct){cp=1;fp(ct,1);}},400);});
-
 // ── 筛选功能 ──────────────────────────────
-function showToast(msg,type){
-    var colors={ok:"#198754",warn:"#e67e22",err:"#dc3545",info:"rgba(0,0,0,0.8)"};
-    var bg=colors[type]||colors.info;
-    var $t=$('<div class="toast-notify">'+msg+'</div>').appendTo("body");
-    $t.css({position:"fixed",bottom:30,left:"50%",transform:"translateX(-50%)",background:bg,color:"#fff",padding:"8px 20px","border-radius":"6px","z-index":99999,fontSize:"14px","white-space":"nowrap"});
-    setTimeout(function(){$t.fadeOut(500,function(){$(this).remove();});},1800);
-}
-function batchUpdateCells(upds){
-    if(!upds.length)return;
-    for(var i=0;i<upds.length;i++){if(!upds[i].table){showToast("❌ 未指定表名");return;}}
-    $.ajax({url:"/api/table/batch-update",type:"POST",contentType:"application/json",data:JSON.stringify({updates:upds}),success:function(r){
-        if(r.code===0){
-            var fails=r.fails||[];
-            if(fails.length) showToast("⚠️ 成功 "+(r.msg.match(/成功 (\d+)/)?.[1]||0)+" 个，失败 "+fails.length+" 个", "warn");
-            else showToast("✅ 成功更新 "+upds.length+" 个单元格", "ok");
-        }
-        else showToast("❌ "+r.msg, "err");
-    }});
-}
 var _filterField=null;
 // 点击筛选图标
 $(document).on("click",".filter-icon",function(e){
@@ -664,30 +531,20 @@ $(document).on("click",".filter-icon",function(e){
 // 关闭筛选下拉
 $("#filterDropdown .filter-dropdown-close").click(function(){$("#filterDropdown").hide();});
 $(document).click(function(e){
-    if(!$(e.target).closest("#filterDropdown,.filter-icon,.col-func-filter").length)$("#filterDropdown").hide();
+    if(!$(e.target).closest("#filterDropdown,.filter-icon").length)$("#filterDropdown").hide();
 });
-// 加载列唯一值（支持级联：排除自身字段，用其他已选字段做条件）
-function loadFilterValues(fld, cascade){
+// 加载列唯一值
+function loadFilterValues(fld){
     $("#filterValueList").html('<div class="text-center py-2"><span class="spinner-border spinner-border-sm"></span></div>');
-    var url="/api/table/"+encodeURIComponent(ct)+"/column/"+encodeURIComponent(fld)+"/values";
-    if(cascade){
-        // 传当前 _filters 中除自身外的其他字段
-        var cf={};
-        for(var k in _filters){
-            if(k!==fld && _filters[k] && _filters[k].length) cf[k]=_filters[k];
-        }
-        if(Object.keys(cf).length) url+="?filters="+encodeURIComponent(JSON.stringify(cf));
-    }
-    $.getJSON(url,function(r){
+    $.getJSON("/api/table/"+encodeURIComponent(ct)+"/column/"+encodeURIComponent(fld)+"/values",function(r){
         if(r.code||!r.data){$("#filterValueList").html('<div class="text-muted text-center py-2">加载失败</div>');return;}
-        var items=r.data,sel=_filters[fld]||[];
-        if(!items.length){$("#filterValueList").html('<div class="text-muted text-center py-2">无数据</div>');return;}
+        var vals=r.data,sel=_filters[fld]||[];
+        if(!vals.length){$("#filterValueList").html('<div class="text-muted text-center py-2">无数据</div>');return;}
         var html='<div class="filter-values">';
-        items.forEach(function(item){
-            var v=item.value, cnt=item.count;
+        vals.forEach(function(v){
             var display=v==null||v===''?'(空白)':String(v).substring(0,100);
             var checked=sel.length===0||sel.indexOf(String(v))>=0?'checked':'';
-            html+='<label class="filter-value-item"><input type="checkbox" class="filter-cb" data-val="'+String(v??'').replace(/"/g,'&quot;')+'" '+checked+'> <span class="flex-grow-1">'+display+'</span> <span class="text-muted small ms-2" style="flex-shrink:0">('+cnt+')</span></label>';
+            html+='<label class="filter-value-item"><input type="checkbox" class="filter-cb" data-val="'+String(v).replace(/"/g,'&quot;')+'" '+checked+'> '+display+'</label>';
         });
         html+='</div>';
         $("#filterValueList").html(html);
@@ -725,268 +582,38 @@ $("#filterSearchInput").on("input",function(){
     });
 });
 // 清除所有筛选
-// 点击单个筛选标签的 ✕ 移除该字段筛选
-$(document).on("click",".filter-tag-remove",function(e){
-    e.stopPropagation();
-    var fld=$(this).data("field");
-    if(fld&&_filters[fld]){delete _filters[fld];cp=1;fp(ct,1);}
-});
-// 鼠标悬停标签时高亮 ✕
-$(document).on("mouseenter",".filter-tag",function(){$(this).find(".filter-tag-remove").css("opacity","1");});
-$(document).on("mouseleave",".filter-tag",function(){$(this).find(".filter-tag-remove").css("opacity","0.6");});
 $("#clearAllFiltersBtn").click(function(){
     _filters={};
     cp=1;fp(ct,1);
 });
 
-$("#exportBtn").click(function(){if(!ct){alert("请先选择表");return;}var filtersJson=applyFilters();var params=[];if(filtersJson)params.push("filters="+encodeURIComponent(filtersJson));if(_sortField)params.push("order_field="+encodeURIComponent(_sortField));if(_sortField)params.push("order_dir="+encodeURIComponent(_sortDir));var url="/api/table/"+encodeURIComponent(ct)+"/export"+(params.length?"?"+params.join("&"):"");window.location.href=url;});
+$("#exportBtn").click(function(){if(!ct){alert("请先选择表");return;}window.location.href="/api/table/"+encodeURIComponent(ct)+"/export";});
 $("#refreshBtn").click(function(){if(ct)fp(ct,cp);});
-$("#dedupBtn").click(function(){
-    if(!ct){showToast("⚠️ 请先选择一张表","warn");return;}
-    if(!confirm("确定对当前表的关键字段查重并删除重复记录？\n此操作不可撤销！"))return;
-    var $btn=$(this);$btn.prop("disabled",true);
-    $.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/dedup",type:"POST",
-        success:function(r){
-            if(r.code===0){showToast("✅ "+r.msg,"ok");fp(ct,cp);}
-            else showToast("❌ "+r.msg,"err");
-        },
-        error:function(){showToast("❌ 去重请求失败","err");},
-        complete:function(){$btn.prop("disabled",false);}
-    });
-});
-
-// ── 列功能菜单（手动控制，不与 Bootstrap 冲突） ──
-function colFuncToggle(){
-    var menu=$("#colFuncMenu");
-    if(menu.is(":visible")){colFuncHide();return;}
-    if(!ct)return;
-    menu.empty();
-    var $wrap=$("#colFuncWrap");
-    // 定位到 wrap 右下方
-    var pos=$wrap.offset();
-    menu.css({left:"auto",right:0,top:$wrap.outerHeight()+2});
-    var $ths=$("#tableHead th.col-head");
-    $ths.each(function(){
-        var fld=$(this).data("field");
-        var sIcon="↕",sCls="text-muted";
-        if(_sortField===fld){sIcon=_sortDir==="asc"?"↑":"↓";sCls="text-primary fw-bold";}
-        var hasFilter=_filters[fld]&&_filters[fld].length;
-        var fIcon=hasFilter?"🔽":"▾";
-        var fCls=hasFilter?"text-warning":"text-muted";
-        var isHidden=_hiddenCols.indexOf(fld)>=0;
-        var eyeIcon=isHidden?'🚫':'👁️';
-        var eyeCls=isHidden?'text-danger':'text-muted';
-        // 计算当前页该字段的去重值个数
-        var uniq={},cnt=0;
-        $("#tableBody td.editable[data-field='"+fld+"']").each(function(){
-            var v=$(this).text().trim();
-            if(v&&!uniq[v]){uniq[v]=true;cnt++;}
+$("#beautifyBtn").click(function(){
+    $("#dataTable").toggleClass("table-gongwen");
+    var on=$("#dataTable").hasClass("table-gongwen");
+    $(this).toggleClass("btn-outline-secondary btn-secondary").html(on?"📐 美化(开)":"📐 美化");
+    if(on){
+        // 自动调整列宽：遍历表头，按内容长度设宽度
+        $("#dataTable thead th").each(function(){
+            var mx=0;
+            var colIdx=$(this).index();
+            $("#dataTable tbody tr").each(function(){
+                var cell=$(this).children().eq(colIdx);
+                var txt=cell.text()||"";
+                var cw=0;
+                for(var i=0;i<txt.length;i++){var code=txt.charCodeAt(i);cw+= code>0x4e00?18:(code>0x80?12:7);}
+                if(cw>mx)mx=cw;
+            });
+            var hw=0,hdr=$(this).text();
+            for(var i=0;i<hdr.length;i++){var code=hdr.charCodeAt(i);hw+= code>0x4e00?18:(code>0x80?12:7);}
+            if(hw>mx)mx=hw;
+            $(this).css("width",(mx+20)+"px");
         });
-        var countHtml=cnt>0?'<span class="col-func-count text-muted" style="font-size:11px;margin-left:auto;margin-right:2px;white-space:nowrap">'+cnt+'</span>':'';
-        var item=$('<li style="padding:4px 12px;border-bottom:1px solid #eee;display:flex;align-items:center;gap:4px;font-size:13px">'
-            +'<span class="col-func-eye '+eyeCls+'" data-field="'+fld+'" title="点击切换显示/隐藏" style="cursor:pointer;width:20px;text-align:center;user-select:none">'+eyeIcon+'</span>'
-            +'<span class="col-func-sort '+sCls+'" data-field="'+fld+'" title="排序" style="cursor:pointer;width:20px;text-align:center;user-select:none">'+sIcon+'</span>'
-            +'<span class="flex-grow-1 col-func-name" data-field="'+fld+'" title="点击选中该列" style="cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+fld+'</span>'
-            +countHtml
-            +'<span class="col-func-filter ms-1 '+fCls+'" data-field="'+fld+'" title="筛选" style="cursor:pointer;width:20px;text-align:center;user-select:none">'+fIcon+'</span>'
-            +'</li>');
-        menu.append(item);
-    });
-    menu.show();
-}
-function colFuncHide(){
-    $("#colFuncMenu").hide();
-}
-// 按钮切换菜单
-$("#colFuncBtn").on("click",function(e){e.stopPropagation();colFuncToggle();});
-// 点击外部关闭
-$(document).on("click",function(e){
-    if($("#colFuncMenu").is(":visible")&&!$(e.target).closest("#colFuncWrap").length)colFuncHide();
-});
-// 排序操作
-$(document).on("click",".col-func-sort",function(e){
-    var fld=$(this).data("field");
-    if(!fld)return;
-    if(_sortField!==fld){_sortField=fld;_sortDir="asc";}
-    else if(_sortDir==="asc"){_sortDir="desc";}
-    else{_sortField=null;_sortDir="asc";}
-    colFuncHide();
-    if(ct)fp(ct,1);
-});
-// 筛选操作
-$(document).on("click",".col-func-filter",function(e){
-    var fld=$(this).data("field");
-    if(!fld)return;
-    colFuncHide();
-    var $wrap=$("#colFuncWrap");
-    var txt=fld;
-    $("#filterFieldName").text("筛选: "+txt);
-    _filterField=fld;
-    var pos=$wrap.offset();
-    $("#filterDropdown").css({
-        left:Math.max(10,pos.left-100),
-        top:pos.top+$wrap.outerHeight()+2,
-        minWidth:240
-    }).show();
-    loadFilterValues(fld, true);
-});
-// 列功能菜单：列名点击选中 + 拖拽多选
-var _funcDrag=false,_funcStart=null,_funcRange=null;
-$(document).on("mousedown",".col-func-name",function(e){
-    if(e.shiftKey||e.ctrlKey||e.metaKey)return;
-    _funcDrag=true;_funcStart=this;_funcRange=null;
-});
-$(document).on("mouseenter",".col-func-name",function(){
-    if(!_funcDrag||!_funcStart)return;
-    var $items=$("#colFuncMenu .col-func-name");
-    var idx1=$items.index(_funcStart),idx2=$items.index(this);
-    if(idx1<0||idx2<0)return;
-    var cols=[];
-    for(var i=Math.min(idx1,idx2);i<=Math.max(idx1,idx2);i++){
-        var f=$items.eq(i).data("field");
-        if(f)cols.push(f);
-    }
-    _funcRange=cols;
-});
-$(document).on("mouseup",function(){_funcDrag=false;});
-$(document).on("click",".col-func-name",function(e){
-    e.stopPropagation();
-    var fld=$(this).data("field");
-    if(!fld)return;
-    colFuncHide();
-    var cols=_funcRange||[fld];
-    _funcRange=null;_funcStart=null;
-    selClearCols();
-    cols.forEach(function(f){
-        var $th=$("#tableHead th.col-head[data-field='"+f+"']");
-        if($th.length)$th.addClass("selected-header");
-    });
-    _colSel={first:cols.length?$("#tableHead th.col-head[data-field='"+cols[0]+"']")[0]:null,cols:cols};
-    mirrorColSelection();
-});
-
-var _hiddenModal=null,_deletedModal=null;
-function openHiddenModal(){
-    if(!_hiddenModal)_hiddenModal=new bootstrap.Modal(document.getElementById("hiddenModal"));
-    $.getJSON("/api/table/"+encodeURIComponent(ct)+"/rows/deleted?type=1",function(r){
-        if(r.code===0){
-            var html='<table class="table table-sm table-bordered"><tr><th>ID</th><th>操作</th></tr>';
-            (r.data||[]).forEach(function(row){
-                var vals='';for(var f in row){if(f!=='id'&&f!=='_deleted')vals+=f+':'+row[f]+' ';}
-                html+='<tr><td>'+row.id+'</td><td>'+vals.substring(0,60)+'... <button class="btn btn-sm btn-success restore-hidden" data-id="'+row.id+'">恢复</button></td></tr>';
-            });
-            html+='</table><button class="btn btn-sm btn-outline-success" id="unhideAllRowsBtn">全部恢复</button>';
-            $("#hiddenResult").html(html);
-        }else $("#hiddenResult").html('<div class="alert alert-danger">'+r.msg+'</div>');
-    });
-    _hiddenModal.show();
-}
-$(document).on("click",".restore-hidden",function(){
-    var rid=$(this).data("id");
-    $.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/row/"+rid+"/restore",type:"POST",success:function(r){
-        if(r.code===0){openHiddenModal();fp(ct,cp);showToast("✅ 已恢复","ok");}
-        else alert(r.msg);
-    }});
-});
-$(document).on("click","#unhideAllRowsBtn",function(){
-    $.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/rows/unhide-all",type:"POST",success:function(r){
-        if(r.code===0){_hiddenModal.hide();fp(ct,cp);showToast("✅ 已全部恢复","ok");}
-        else alert(r.msg);
-    }});
-});
-function openDeletedModal(){
-    if(!_deletedModal)_deletedModal=new bootstrap.Modal(document.getElementById("deletedModal"));
-    $.getJSON("/api/table/"+encodeURIComponent(ct)+"/rows/deleted?type=2",function(r){
-        if(r.code===0){
-            var html='<table class="table table-sm table-bordered"><tr><th>ID</th><th>操作</th></tr>';
-            (r.data||[]).forEach(function(row){
-                var vals='';for(var f in row){if(f!=='id'&&f!=='_deleted')vals+=f+':'+row[f]+' ';}
-                html+='<tr><td>'+row.id+'</td><td>'+vals.substring(0,60)+'... <button class="btn btn-sm btn-success restore-deleted" data-id="'+row.id+'">恢复</button></td></tr>';
-            });
-            html+='</table>';
-            $("#deletedResult").html(html);
-        }else $("#deletedResult").html('<div class="alert alert-danger">'+r.msg+'</div>');
-    });
-    _deletedModal.show();
-}
-$(document).on("click",".restore-deleted",function(){
-    var rid=$(this).data("id");
-    if(!confirm("恢复此记录？"))return;
-    $.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/rows/un-table-delete",type:"POST",contentType:"application/json",
-        data:JSON.stringify({ids:[rid]}),
-        success:function(r){
-            if(r.code===0){fp(ct,cp);showToast("✅ 已恢复","ok");}
-            else showToast("❌ "+r.msg,"err");
-        }
-    });
-});
-
-
-$("#dbViewBtn").click(function(){
-    if(!_dvModal)_dvModal=new bootstrap.Modal(document.getElementById("dvModal"));
-    $("#dvResult").html('<div class="text-center py-4"><span class="spinner-border spinner-border-sm"></span> 加载中...</div>');
-    $.getJSON("/api/database/overview",function(r){
-        if(r.code===0&&r.data&&r.data.length){
-            var html='<table class="table table-sm table-bordered" style="font-size:13px"><thead><tr>'
-                +'<th>表名</th><th>注释</th><th>字段数</th><th>总行数</th><th>隐藏</th><th>删除</th><th>操作</th></tr></thead><tbody>';
-            r.data.forEach(function(t){
-                var hc=t.hidden_rows?'<span class="text-warning">'+t.hidden_rows+'</span>':'<span class="text-muted">0</span>';
-                var dc=t.deleted_rows?'<span class="text-danger">'+t.deleted_rows+'</span>':'<span class="text-muted">0</span>';
-                html+='<tr><td><strong>'+t.name+'</strong></td><td class="text-muted small">'+(t.comment||'')+'</td>'
-                    +'<td class="text-center">'+t.columns+'</td><td class="text-center">'+t.total_rows+'</td>'
-                    +'<td class="text-center">'+hc+'</td><td class="text-center">'+dc+'</td>'
-                    +'<td><button class="btn btn-sm btn-outline-primary db-view-table" data-table="'+t.name+'">📂 查看</button></td></tr>';
-            });
-            html+='</tbody></table>';
-            var totalTables=r.data.length;
-            var totalRows=r.data.reduce(function(s,t){return s+t.total_rows;},0);
-            var totalHidden=r.data.reduce(function(s,t){return s+t.hidden_rows;},0);
-            var totalDeleted=r.data.reduce(function(s,t){return s+t.deleted_rows;},0);
-            html+='<div class="mt-2 small text-muted">共 <strong>'+totalTables+'</strong> 张表，<strong>'+totalRows+'</strong> 条记录，隐藏 <strong>'+totalHidden+'</strong>，表删除 <strong>'+totalDeleted+'</strong></div>';
-            $("#dvResult").html(html);
-        }else $("#dvResult").html('<div class="alert alert-danger">'+(r.msg||'无数据')+'</div>');
-    });
-    _dvModal.show();
-});
-// 数据库总览 → 查看某表所有行（在主表中展示，含删除记录）
-$(document).on("click","#exitShowAllBtn",function(){exitShowAll();});
-$(document).on("click",".db-view-table",function(){
-    var tbl=$(this).data("table");
-    if(!tbl)return;
-    $("#dvModal").modal("hide");
-    // 切换到该表（绕过 loadTable 以免清空 _showAllRows）
-    ct=tbl;cp=1;
-    $("#emptyState").hide();$("#tableView").show();
-    // 侧边栏高亮
-    $(".sidebar .list-group-item").removeClass("active");
-    $('.sidebar .list-group-item[data-name="'+tbl+'"]').addClass("active");
-    _showAllRows=true;
-    fp(tbl,1);
-});
-// 退出全部记录模式
-function exitShowAll(){
-    $("#showAllBanner").remove();
-    // 点击侧边栏当前激活项触发 loadTable（重置 _showAllRows+刷新）
-    $(".sidebar .list-group-item.active").click();
-}
-// 显示全部记录的提示栏 — 仅在 _showAllRows 时创建，退出时移除
-function updateShowAllBanner(){
-    if(_showAllRows){
-        if(!$("#showAllBanner").length){
-            var $b=$('<div id="showAllBanner" class="alert alert-warning d-flex align-items-center justify-content-between py-2 mb-2 small" style="margin-top:-12px">'
-                +'<span>📋 显示全部记录（含隐藏/删除）— 共 <strong id="showAllCount"></strong> 条</span>'
-                +'<button class="btn btn-sm btn-outline-dark" id="exitShowAllBtn">✕ 返回正常视图</button></div>');
-            $(".table-responsive").before($b);
-        }
     }else{
-        $("#showAllBanner").remove();
+        $("#dataTable thead th").css("width","");
     }
-}
-
-// 显示隐藏/表删除行计数
-$("#hiddenCountBtn").click(function(){openHiddenModal();});
-$("#deletedCountBtn").click(function(){openDeletedModal();});
-
+});
 // ── 多表汇总 ──────────────────────────────────
 var _aggregateModal=null;
 $(document).ready(function(){_aggregateModal=new bootstrap.Modal(document.getElementById("aggregateModal"));});
@@ -1309,61 +936,25 @@ function posMenu($m,e){
     if(x+mw>ww-10)x=ww-mw-10; if(y+mh>wh-10)y=wh-mh-10; if(x<10)x=10; if(y<10)y=10;
     $m.css({left:x,top:y}).show();
 }
-$(document).on("contextmenu","#tableBody",function(e){
-    e.preventDefault();
-    var rid=$(e.target).closest("tr").data("id"),$m=$("#rowMenu");$m.data("rid",rid||0);posMenu($m,e);$("#colMenu").hide();
-});
+$(document).on("contextmenu","#tableBody",function(e){e.preventDefault();var rid=$(e.target).closest("tr").data("id"),$m=$("#rowMenu");$m.data("rid",rid||0);posMenu($m,e);$("#colMenu").hide();});
 $(document).on("click",function(){$("#rowMenu,#colMenu").hide();});
 $("#rowMenu").on("click",".context-menu-item",function(e){
     e.stopPropagation();var action=$(this).attr("data-action"),rid=$("#rowMenu").data("rid");$("#rowMenu").hide();
-    if(action==="copy-selection"){doCopy();}
-    if(action==="paste-to-selection"){doPaste();}
-    if(action==="clear-selection"){
-        if(!_colSel.cols.length&&(!_sel||!_sel.cells.length)){showToast("⚠️ 未选中区域","warn");return;}
-        var updates=[];
-        // 单元格选中优先于列选中（拖拽选中 > 列头选中）
-        if(_sel&&_sel.cells.length){
-            _sel.cells.forEach(function(td){
-                var rid=$(td).closest("tr").data("id"),fld=$(td).data("field");
-                if(rid&&fld){updates.push({table:ct,id:rid,field:fld,value:null});$(td).text("");}
-            });
-        }else if(_colSel.cols.length){
-            $("#tableBody tr").each(function(){
-                var rid=$(this).data("id");
-                _colSel.cols.forEach(function(f){
-                    var $td=$(this).find("td.editable[data-field='"+f+"']");
-                    if($td.length){updates.push({table:ct,id:rid,field:f,value:null});$td.text("");}
-                },this);
-            });
-        }
-        if(updates.length)$.ajax({url:"/api/table/batch-update",type:"POST",contentType:"application/json",
-            data:JSON.stringify({updates:updates}),
-            success:function(r){if(r.code===0)showToast("✅ 已清除 "+updates.length+" 个单元格","ok");else alert(r.msg);}
-        });
-        return;
-    }
     if(action==="insert"){if(!ct){alert("当前表名为空");return;}console.log("insert into:",ct);$.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/row",type:"POST",success:function(r){console.log("insert ok:",r);if(r.code===0){fp(ct,1);$.getJSON("/api/tables",function(rt){if(rt.code===0)$("#tableCount").text(rt.data.length+" 张表");});}else alert(r.msg);},error:function(xhr){alert("插入失败 状态:"+xhr.status);}});}
     if(action==="view-record"&&rid){$.getJSON("/api/table/"+encodeURIComponent(ct)+"/record/"+rid,function(r){if(r.code===0){var g=r.data.groups,ch={},h='';g.forEach(function(grp){h+='<div class="mb-2"><strong class="text-primary small">📋 '+grp.table+'</strong><table class="table table-sm table-bordered mb-0 mt-1" data-table="'+grp.table+'" data-id="'+grp.id+'"><thead><tr><th style="width:30%">字段名</th><th>字段值</th></tr></thead><tbody>';for(var f in grp.fields){var v=grp.fields[f];h+='<tr><td class="text-muted small">'+f+'</td><td class="rec-val" data-table="'+grp.table+'" data-id="'+grp.id+'" data-field="'+f+'">'+(v||'')+'</td></tr>';}h+='</tbody></table></div>';});h+='<div class="d-flex gap-2"><button class="btn btn-primary btn-sm" id="applyRecordBtn">✅ 应用</button><span id="recordStatus" class="small align-self-center"></span></div>';$("#recordContent").html(h);_recordChanges={};$("#applyRecordBtn").click(function(){var ups=[];for(var k in _recordChanges){var u=_recordChanges[k];ups.push({table:u.table,id:u.id,field:u.field,value:u.val});}if(!ups.length){$("#recordStatus").text("无修改");return;}$("#applyRecordBtn").prop("disabled",true);$("#recordStatus").text("提交中...");$.ajax({url:"/api/table/batch-update",type:"POST",contentType:"application/json",data:JSON.stringify({updates:ups}),success:function(r2){$("#recordStatus").text(r2.msg);if(r2.code===0){_recordChanges={};$(".rec-changed").removeClass("rec-changed");if(ct)fp(ct,cp);}setTimeout(function(){$("#recordStatus").text("");},3000);},complete:function(){$("#applyRecordBtn").prop("disabled",false);}});});(new bootstrap.Modal(document.getElementById("recordModal"))).show();}});}
-
 $(document).on("dblclick",".rec-val",function(){var td=$(this);if(td.find("input").length)return;var v=td.text(),tbl=td.data("table"),rid=td.data("id"),fld=td.data("field");td.html('<input type="text" class="form-control form-control-sm" value="'+v.replace(/"/g,"&quot;")+'">');var inp=td.find("input");inp.focus();inp.select();inp.on("blur",function(){var nv=inp.val();if(nv!==v){_recordChanges[tbl+"_"+rid+"_"+fld]={table:tbl,id:rid,field:fld,val:nv};td.addClass("rec-changed");}td.html(nv);});inp.on("keydown",function(e){if(e.key==="Enter")inp.blur();if(e.key==="Escape")td.html(v);});});
 $(document).on("click",".rec-val",function(){$("#rowMenu,#colMenu").hide();});
-    if(action==="hide-row"){
-        var ids=[];if(rid)ids.push(rid);else _sel.cells.forEach(function(td){var r=td.closest("tr").data("id");if(r&&ids.indexOf(r)<0)ids.push(r);});
-        if(!ids.length){alert("请先选中要隐藏的行");return;}
-        if(!confirm("确认从本表隐藏 "+ids.length+" 行？"))return;
+    if(action==="hide-row"&&rid)$.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/row/"+rid+"/hide",type:"POST",success:function(r){if(r.code===0){fp(ct,1);}else alert(r.msg);},error:function(){alert("隐藏失败");}});
+    if(action==="hide-selected-rows"){
+        var ids=[];_sel.cells.forEach(function(td){
+            var rid=td.closest("tr").data("id");
+            if(rid&&ids.indexOf(rid)<0)ids.push(rid);
+        });
+        if(ids.length===0){alert("请先选中要隐藏的行（Shift+点击选择范围）");return;}
+        if(!confirm("确认隐藏 "+ids.length+" 行？"))return;
         $.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/rows/hide",type:"POST",contentType:"application/json",
             data:JSON.stringify({ids:ids}),
             success:function(r){if(r.code===0){fp(ct,cp);selClear();}else alert(r.msg);}
-        });
-    }
-    if(action==="table-delete"){
-        var ids=[];if(rid)ids.push(rid);else _sel.cells.forEach(function(td){var r=td.closest("tr").data("id");if(r&&ids.indexOf(r)<0)ids.push(r);});
-        if(!ids.length){alert("请先选中要删除的行");return;}
-        if(!confirm("确认从本表删除 "+ids.length+" 行？\n可从数据库总览（🗄 数据库）恢复"))return;
-        var done=0;
-        ids.forEach(function(id,i){
-            $.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/row/"+id+"/table-delete",type:"POST",
-                success:function(){done++;if(done===ids.length){fp(ct,cp);selClear();}}});
         });
     }
     if(action==="copy-rows"&&rid){
@@ -1376,56 +967,47 @@ $(document).on("click",".rec-val",function(){$("#rowMenu,#colMenu").hide();});
             success:function(r){if(r.code===0)alert(r.msg);else alert(r.msg);}
         });
     }
-    if(action==="delete-row"){
-        var ids=[];if(rid)ids.push(rid);else _sel.cells.forEach(function(td){var r=td.closest("tr").data("id");if(r&&ids.indexOf(r)<0)ids.push(r);});
-        if(!ids.length){alert("请先选中要删除的行");return;}
-        if(!confirm("确认从数据库永久删除 "+ids.length+" 行？\n不可恢复！"))return;
-        ids.forEach(function(id){
-            $.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/row/"+id,type:"DELETE",
-                success:function(r){if(r.code===0)fp(ct,cp);else alert(r.msg);}});
-        });
-    }
+    if(action==="delete-row"&&rid&&confirm("确认从数据库永久删除第 "+rid+" 行？\n不可恢复！"))$.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/row/"+rid,type:"DELETE",success:function(r){if(r.code===0)fp(ct,cp);else alert(r.msg);}});
 });
 // ── 列头选中（点击/拖拽/Shift）+ 联动表体 ──
 var _colSel={first:null,cols:[]},_colDragging=false,_colMoved=false;
 function mirrorColSelection(){
     $("#tableBody td").removeClass("selected-cell col-selected");
-    if(!_colSel.cols.length){updateSelectionStats();return;}
+    if(!_colSel.cols.length)return;
     var fields=_colSel.cols;
     $("#tableBody td.editable").each(function(){
         if(fields.indexOf($(this).data("field"))>=0){
             $(this).addClass("selected-cell");
         }
     });
-    updateSelectionStats();
 }
 function selClearCols(){
     $("#tableHead th.col-head").removeClass("selected-header");
     $("#tableBody td").removeClass("selected-cell col-selected");
     _colSel={first:null,cols:[]};
-    updateSelectionStats();
 }
 // 列头 mousedown → 记录选中的第一个列头
 function colHeadMouseDown(e){
-    if(e.button!==0||e.shiftKey||e.ctrlKey||e.metaKey)return;
+    if($(e.target).closest(".filter-icon").length)return; // 排除筛选图标
+    if(e.shiftKey||e.ctrlKey||e.metaKey)return;
+    e.preventDefault();
     _colDragging=false;_colMoved=false;
-    selClear();
-    selClearCols();
     var fld=$(this).data("field");
     _colSel={first:this,cols:[fld]};
+    selClearCols();
     $(this).addClass("selected-header");
     mirrorColSelection();
 }
 // 全局 mousemove → elementFromPoint 检测列头拖拽
 function colHeadGlobalMove(e){
     if(!_colSel.first||_colSel.cols.length===0)return;
-    if(e.buttons===0)return;  // 没有按住鼠标按钮时不响应
     var el=$(document.elementFromPoint(e.clientX,e.clientY));
     var $th=el.closest("th.col-head");
     if(!$th.length)return;
+    // 必须是从之前 mousedown 的同父级 #tableHead 内出发的拖拽
     if(!$th.closest("#tableHead").length)return;
     var startFirst=_colSel.first;
-    if(!$(startFirst).closest("#tableHead").length)return;
+    // 确认 start 还在同个 tableHead 内
     if(!$(startFirst).closest("#tableHead").length)return;
     _colMoved=true;_colDragging=true;
     var $ths=$("#tableHead th.col-head");
@@ -1448,10 +1030,14 @@ function colHeadGlobalUp(e){
         return;
     }
     // 单击：不处理，交由下面的 click 处理
-
+    // 但如果点击了筛选图标，清除临时状态
+    if($(e.target).closest(".filter-icon").length){
+        selClearCols();
+    }
 }
 // 列头 click → Shift 范围 / Ctrl 切换 / 普通单选
 $(document).on("click","#tableHead th.col-head",function(e){
+    if($(e.target).closest(".filter-icon").length)return;
     if(_colMoved){_colMoved=false;e.stopImmediatePropagation();return;}
     if(e.shiftKey&&_colSel.first){
         e.preventDefault();
@@ -1474,61 +1060,12 @@ $(document).on("click","#tableHead th.col-head",function(e){
         else _colSel.cols.push(fld);
         _colSel.first=this;
         mirrorColSelection();
-    }else{
-        // 普通点击：mousedown 已选中本列，只需阻止排序动作
-        // selClearCols() 已在 colHeadMouseDown 中由旧的点击触发的排序 re-render 之前清除
-        // 现在排序不会因普通点击触发，所以保留 mousedown 的选中状态
     }
 });
 // 绑定列头选中事件（用 VTable 式：container 级捕获，全局 mousemove 跟踪）
 $(document).on("mousedown","#tableHead th.col-head",colHeadMouseDown);
 $(document).on("mousemove",colHeadGlobalMove);
 $(document).on("mouseup",colHeadGlobalUp);
-// ── 行号选中（点击行号选中行 + 拖拽多选行） ──
-var _rowSel={active:false,firstRow:null,rows:[]};
-function mirrorRowSelection(){
-    $("#tableBody tr").removeClass("row-selected");
-    _rowSel.rows.forEach(function(rid){
-        $("#tableBody tr[data-id='"+rid+"']").addClass("row-selected");
-    });
-}
-function selClearRows(){
-    $("#tableBody tr").removeClass("row-selected");
-    _rowSel={active:false,firstRow:null,rows:[]};
-}
-$(document).on("mousedown","td.row-num",function(e){
-    if(e.shiftKey||e.ctrlKey||e.metaKey)return;
-    e.preventDefault();
-    var rid=$(this).closest("tr").data("id");
-    // 清除已有行选中
-    selClearRows();
-    _rowSel={active:true,firstRow:rid,rows:[rid]};
-    mirrorRowSelection();
-}).on("mousemove",function(e){
-    if(!_rowSel.active||!_rowSel.firstRow)return;
-    var el=document.elementFromPoint(e.clientX,e.clientY);
-    var $td=$(el).closest("td.row-num");
-    if(!$td.length)return;
-    var $tr=$td.closest("tr");
-    if(!$tr.length)return;
-    var rid=$tr.data("id");
-    // 找到 firstRow 所在行索引
-    var $allRows=$("#tableBody tr");
-    var idx1=$allRows.index($("#tableBody tr[data-id='"+_rowSel.firstRow+"']"));
-    var idx2=$allRows.index($tr);
-    if(idx1<0||idx2<0)return;
-    $("#tableBody tr").removeClass("row-selected");
-    _rowSel.rows=[];
-    for(var i=Math.min(idx1,idx2);i<=Math.max(idx1,idx2);i++){
-        var r=$allRows.eq(i);
-        _rowSel.rows.push(r.data("id"));
-    }
-    mirrorRowSelection();
-}).on("mouseup",function(e){
-    if(_rowSel.active){
-        _rowSel.active=false;
-    }
-});
 // 右键菜单（列）
 $(document).on("contextmenu","#tableHead th.col-head",function(e){e.preventDefault();
     var fld=$(this).data("field"),typ=$(this).attr("data-type")||"";
@@ -1536,18 +1073,25 @@ $(document).on("contextmenu","#tableHead th.col-head",function(e){e.preventDefau
     $("#colTypeInfo").text("类型: "+typ);
     var isKf=(fld===_currentKf);
     $("#colMenu").find('[data-action="toggle-key-field"]').text(isKf?"🚫 取消核心字段":"🔑 设为核心字段");
-    var isFrozen=_frozenCols.indexOf(fld)>-1;$("#colMenu").find('[data-action="toggle-freeze"]').text(isFrozen?"❄️ 取消冻结":"❄️ 冻结此列");
-    var hasFormula=_formulaCols[ct]&&_formulaCols[ct][fld];$("#colMenu").find('[data-action="set-formula"]').text(hasFormula?"📐 修改公式":"📐 公式");
-
+    // 多选模式：显示隐藏已选列
+    if(_colSel.cols.length>1){
+        $("#colMenu").find('[data-action="hide-col"]').text('👁 隐藏已选 '+_colSel.cols.length+' 列');
+    }else{
+        $("#colMenu").find('[data-action="hide-col"]').text('👁 隐藏本列');
+    }
     posMenu($("#colMenu"),e);$("#rowMenu").hide();});
 $("#colMenu").on("click",".context-menu-item",function(){
     var action=$(this).data("action"),fld=$("#colMenu").data("field");$("#colMenu").hide();
     if(action==="change-type"){var cur=$("#colTypeInfo").text().replace("类型: ","");var $sel=$("<select class='form-select form-select-sm' style='position:fixed;z-index:10000;min-width:160px'>").appendTo("body");var opts=[{v:"VARCHAR(255)",l:"VARCHAR(255)"},{v:"INT",l:"INT"},{v:"DOUBLE",l:"DOUBLE(小数)"},{v:"BIGINT",l:"BIGINT(大整数)"},{v:"DATE",l:"DATE(日期)"},{v:"TEXT",l:"TEXT(长文本)"}];opts.forEach(function(t){$sel.append("<option value='"+t.v+"'>"+t.l+"</option>");});$sel.val(cur).css({left:$("#colMenu").offset().left,top:$("#colMenu").offset().top+$("#colMenu").height()}).focus();$sel.on("change",function(){var nt=$(this).val();$(this).remove();if(nt)$.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/column/"+encodeURIComponent(fld)+"/type",type:"PATCH",contentType:"application/json",data:JSON.stringify({type:nt}),success:function(r){if(r.code===0)fp(ct,cp);else alert(r.msg);}});});$sel.on("blur",function(){var t=this;setTimeout(function(){if($(t).is(":visible"))$(t).remove();},200);});}
     if(action==="insert-col"){var nn=prompt("新列名：","新字段");if(nn&&nn.trim())$.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/column",type:"POST",contentType:"application/json",data:JSON.stringify({name:nn.trim(),after:fld}),success:function(r){if(r.code===0)fp(ct,cp);else alert(r.msg);}});}
-
+    if(action==="hide-col"){
+        var cols=_colSel.cols.length>1?_colSel.cols:[fld];
+        $.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/column/hide",type:"POST",contentType:"application/json",
+            data:JSON.stringify({columns:cols}),
+            success:function(r){if(r.code===0){cols.forEach(function(c){if(_hiddenCols.indexOf(c)<0)_hiddenCols.push(c);});applyHiddenCols();selClearCols();}else alert(r.msg);}
+        });
+    }
     if(action==="delete-col"&&confirm("确认删除列「"+fld+"」？该列数据将永久丢失！"))$.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/column/"+encodeURIComponent(fld),type:"DELETE",success:function(r){if(r.code===0)fp(ct,cp);else alert(r.msg);}});
-    if(action==="toggle-freeze"){var idx=_frozenCols.indexOf(fld);if(idx>-1){_frozenCols.splice(idx,1);}else{_frozenCols.push(fld);}applyFrozen();}
-    if(action==="set-formula"){if(!_formulaCols[ct])_formulaCols[ct]={};var cur=_formulaCols[ct][fld]||"";if(cur){if(confirm("清除「"+fld+"」的公式【"+cur+"】？\n取消可修改公式")){delete _formulaCols[ct][fld];fp(ct,cp);}else{var expr=prompt("公式（支持 + - * / ( )，字段名引用）：",cur);if(expr&&expr.trim()){_formulaCols[ct][fld]=expr.trim();fp(ct,cp);}}}else{var expr=prompt("公式（支持 + - * / ( )，字段名引用）：\n示例：路面宽度*长度");if(expr&&expr.trim()){_formulaCols[ct][fld]=expr.trim();fp(ct,cp);}}}
     if(action==="toggle-key-field"){
         var newKf=(_currentKf===fld)?"":fld;
         $.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/key-field",type:"PUT",contentType:"application/json",
@@ -1608,7 +1152,6 @@ $("#confirmReorder").click(function(){
 
 // ========== 选区 + 复制/粘贴 ==========
 var _sel={active:false,cells:[],fields:[],firstTd:null};
-var _copyTable="";
 
 function selClear(){
     if(_dragSel._pt)return; // 拖拽保护中不清除选中
@@ -1616,42 +1159,16 @@ function selClear(){
     $("#tableBody td .fill-handle").remove();
     $("#tableHead th").removeClass("selected-header");
     _sel={active:false,cells:[],fields:[],firstTd:null};
-    updateSelectionStats();
 }
 
 function selCols(){return $("#tableBody tr:first td.editable").length||1;}
 
-function updateSelectionStats(){
-    var $bar=$("#selectionBar"),$info=$("#selInfo");
-    var cells=_sel&&_sel.cells?$(_sel.cells).filter(function(){return this.closest("tr")&&$(this).closest("tr").data("id");}).get():[];
-    // Also count column selection if no cell selection
-    if(!cells.length&&_colSel&&_colSel.cols.length){
-        var cid="";cells=[];$("#tableBody td.editable").each(function(){
-            if(_colSel.cols.indexOf($(this).data("field"))>=0&&cid!==($(this).closest("tr").data("id")||"")){
-                cid=$(this).closest("tr").data("id")||"";
-                cells.push(this);
-            }
-        });
-    }
-    if(!cells.length){$bar.hide();return;}
-    var rows={};var fields={};var sum=0;var numCount=0;
-    cells.forEach(function(td){
-        var $td=$(td);var rid=$td.closest("tr").data("id");if(rid)rows[rid]=true;
-        var fld=$td.data("field");if(fld)fields[fld]=true;
-        var v=$td.text().trim().replace(/,/g,"");
-        if(v&&!isNaN(v)){sum+=parseFloat(v);numCount++;}
-    });
-    var rn=Object.keys(rows).length,fn=Object.keys(fields).length,cn=cells.length;
-    var txt=rn+" 行 × "+fn+" 列，共 "+cn+" 个单元格";
-    if(numCount>0)txt+="，总和 "+sum.toFixed(2);
-    $info.text(txt);$bar.show();
-}
-
 // ── 拖拽选中 + 单击/Shift选中 ────────────────────
 var _dragSel={active:false,startTd:null,moved:false,_pt:false};
 $(document).on("mousedown","td.editable",function(e){
-    if(e.button!==0||e.ctrlKey||e.metaKey)return;
+    if(e.shiftKey||e.ctrlKey||e.metaKey)return;
     if($(e.target).is(".fill-handle,.cell-editor"))return;
+    e.preventDefault();
     if(window.getSelection)window.getSelection().removeAllRanges();
     _dragSel={active:true,startTd:this,moved:false,_pt:false};
 }).on("mousemove",function(e){
@@ -1674,7 +1191,6 @@ $(document).on("mousedown","td.editable",function(e){
             var td2=$tds.eq(r*nc+c);if(td2.length){td2.addClass("selected-cell");_sel.cells.push(td2);}
         }
     _sel.fields=_sel.cells.map(function(td){return td.data("field");}).filter(function(v,i,a){return a.indexOf(v)===i;});
-    updateSelectionStats();
 }).on("mouseup",function(e){
     var $td=$(e.target).closest("td.editable");
     if(_dragSel.active&&_dragSel.moved){
@@ -1708,19 +1224,12 @@ $(document).on("mousedown","td.editable",function(e){
                 _sel={active:true,cells:[$td],fields:[$td.data("field")],firstTd:$td[0]};
                 if(!$td.find(".fill-handle").length)$td.append('<div class="fill-handle" title="下拉填充"></div>');
             }
-            updateSelectionStats();
         }
     }
 });
 // 保护：拖拽后拦截 click，避免清除选中
 $(document).on("click","td.editable",function(e){
     if(_dragSel._pt){e.stopImmediatePropagation();e.preventDefault();return;}
-});
-// 窗口失焦点或鼠标在窗口外释放时清理拖拽状态，防止选中卡死
-$(window).on("mouseup blur",function(){
-    if(_dragSel.active||_dragSel.moved){
-        _dragSel.active=false;_dragSel.moved=false;
-    }
 });
 // 填充柄：拖拽填充
 var _fillDrag={active:false};
@@ -1757,12 +1266,10 @@ $(document).on("mousedown",".fill-handle",function(e){
     $(".fill-target").removeClass("fill-target");
 });
 
-// Ctrl+C — 复制选中范围
+// Ctrl+C — 复制选中范围（使用可见文本确保所见即所得）
 $(document).on("keydown",function(e){
     if(!(e.ctrlKey||e.metaKey)||e.key!=="c")return;
     if($(document.activeElement).is(".cell-editor"))return;
-    // 列选中或单元格选中都走 doCopy（填充本地缓存）
-    if(_colSel.cols.length||(_sel.active&&_sel.cells.length)){e.preventDefault();doCopy();return;}
     if(!_sel.active||!_sel.cells.length)return;
     var fields=_sel.fields;var selRows={};
     _sel.cells.forEach(function(td){
@@ -1782,12 +1289,11 @@ $(document).on("keydown",function(e){
     e.preventDefault();
 });
 
-// Ctrl+V — 有本地缓存走 doPaste，否则服务端剪贴板
+// Ctrl+V
 $(document).on("keydown",function(e){
     if(!(e.ctrlKey||e.metaKey)||e.key!=="v")return;
+    // 如果正在编辑单元格（输入框有焦点），不拦截原生粘贴
     if($(document.activeElement).is(".cell-editor"))return;
-    // 列选中或本地缓存有数据 → 走 doPaste 避免服务端 INSERT 行
-    if(_colSel.cols.length||_selCellCache){doPaste();e.preventDefault();return;}
     if(!_sel.active||!_sel.firstTd)return;
     $.getJSON("/api/clipboard",function(r){
         if(r.code!==0){alert("剪贴板为空，请先在源表 Ctrl+C");return;}
@@ -1804,146 +1310,6 @@ $(document).on("keydown",function(e){
 // 点击空白取消选区
 $(document).on("click",function(e){
     if(!$(e.target).closest("#dataTable td,#dataTable th").length)selClear();
-});
-
-
-// ── 复制粘贴 ──────────────────────────────
-var _selCellCache=null;
-function doCopy(){
-    var rows={},count=0;
-    if(_sel&&_sel.cells.length){
-        _sel.cells.forEach(function(td){
-            var rid=$(td).closest("tr").data("id");
-            if(!rid)return;
-            if(!rows[rid])rows[rid]={};
-            rows[rid][$(td).data("field")]=$(td).text()||"";count++;
-        });
-    }else if(_colSel.cols.length){
-        var fields=_colSel.cols;
-        $("#tableBody tr").each(function(){
-            var rid=$(this).data("id");if(!rid)return;
-            if(!rows[rid])rows[rid]={};
-            fields.forEach(function(f){
-                var val=$(this).find("td.editable[data-field='"+f+"']").text()||"";
-                rows[rid][f]=val;count++;
-            },this);
-        });
-    }
-    if(!count){showToast("⚠️ 未选中区域","warn");return;}
-    _selCellCache=rows;
-    _copyTable=ct;
-    // 同步到服务端剪贴板（用于跨表自动插入行），格式：fields+二维数组
-    var clipFields=[]; var clipRows=[];
-    for(var rid in rows){for(var f in rows[rid]){if(clipFields.indexOf(f)<0)clipFields.push(f);}break;}
-    for(var rid in rows){var row=[];clipFields.forEach(function(f){row.push(rows[rid][f]!==undefined?rows[rid][f]:null);});clipRows.push(row);}
-    $.ajax({url:"/api/clipboard/copy",type:"POST",contentType:"application/json",
-        data:JSON.stringify({fields:clipFields,rows:clipRows})});
-    showToast("✅ 已复制 "+count+" 个单元格","ok");
-}
-function doPaste(){
-    if(!_selCellCache)return;
-    // 跨表粘贴时，用服务端剪贴板（自动插入缺失行）
-    if(ct&&_copyTable&&ct!==_copyTable){
-        $.ajax({url:"/api/clipboard/paste",type:"POST",contentType:"application/json",
-            data:JSON.stringify({target:ct}),
-            success:function(r2){
-                if(r2.code===0){showToast("✅ "+r2.msg,"ok");fp(ct,cp);}
-                else showToast("❌ "+r2.msg,"err");
-            },
-            error:function(){showToast("❌ 跨表粘贴失败","err");}
-        });
-        return;
-    }
-    var updates=[];
-    // 单元格选中优先于列选中（拖拽选中 > 列头选中）
-    if(_sel&&_sel.cells.length){
-        // 单格锚点 → Excel 风格自动扩展
-        if(_sel.cells.length===1){
-            var anchor=$(_sel.cells[0]);
-            var anchorFld=anchor.data("field");
-            var srcRowIds=Object.keys(_selCellCache);
-            var srcRows=srcRowIds.length;
-            var firstRow=_selCellCache[srcRowIds[0]];
-            var srcFields=Object.keys(firstRow);
-            var srcCols=srcFields.length;
-            var $allFields=$("#tableBody tr:first td.editable");
-            var fieldIdx=$allFields.index($("#tableBody td.editable[data-field='"+anchorFld+"']").first());
-            if(fieldIdx<0)fieldIdx=0;
-            var $allRows=$("#tableBody tr");
-            var rowIdx=$allRows.index(anchor.closest("tr"));
-            if(rowIdx<0)rowIdx=0;
-            for(var ri=0;ri<srcRows;ri++){
-                var srcId=srcRowIds[ri];
-                var srcRowData=_selCellCache[srcId];
-                var srcFlds=Object.keys(srcRowData);
-                var tgtRowIdx=rowIdx+ri;
-                if(tgtRowIdx>=$allRows.length)break;
-                var tgtRid=$allRows.eq(tgtRowIdx).data("id");
-                for(var ci=0;ci<srcCols;ci++){
-                    var tgtColIdx=fieldIdx+ci;
-                    if(tgtColIdx>=$allFields.length)break;
-                    var tgtFld=$allFields.eq(tgtColIdx).data("field");
-                    var srcVal=srcRowData[srcFlds[ci%srcFlds.length]];
-                    if(srcVal!==undefined&&srcVal!==null)
-                        updates.push({table:ct,id:tgtRid,field:tgtFld,value:srcVal});
-                }
-            }
-        }else{
-            // 多格选中 → 位置匹配
-            var srcVals=[];
-            for(var sr in _selCellCache)
-                for(var f in _selCellCache[sr])
-                    srcVals.push(_selCellCache[sr][f]);
-            _sel.cells.forEach(function(td,idx){
-                var rid=$(td).closest("tr").data("id");
-                var fld=$(td).data("field");
-                if(!rid||!fld)return;
-                var val=srcVals[idx];
-                if(val!==undefined&&val!==null&&String(val)!==String($(td).data("val"))){
-                    updates.push({table:ct,id:rid,field:fld,value:val});
-                }
-            });
-        }
-    }else if(_colSel.cols.length){
-        var fields=_colSel.cols;
-        $("#tableBody tr").each(function(){
-            var rid=$(this).data("id");if(!rid)return;
-            var srcRow=null;
-            for(var sr in _selCellCache){
-                if(sr==rid||_selCellCache[sr][fields[0]]){srcRow=_selCellCache[sr];break;}
-            }
-            if(!srcRow) srcRow=Object.values(_selCellCache)[0];
-            if(!srcRow)return;
-            fields.forEach(function(f){
-                var val=srcRow[f]!==undefined?srcRow[f]:(srcRow[Object.keys(srcRow)[0]]||"");
-                if(val!==null&&val!==undefined){
-                    updates.push({table:ct,id:rid,field:f,value:val});
-                }
-            },this);
-        });
-    }
-    if(!updates.length){showToast("⚠️ 无变化或未选中区域","warn");return;}
-    // 直接发 AJAX，成功后刷新表格
-    $.ajax({url:"/api/table/batch-update",type:"POST",contentType:"application/json",
-        data:JSON.stringify({updates:updates}),
-        success:function(r){
-            if(r.code===0){
-                showToast("✅ 粘贴成功 "+updates.length+" 个单元格","ok");
-                fp(ct,cp);
-            }else showToast("❌ "+r.msg,"err");
-        },
-        error:function(){showToast("❌ 粘贴失败","err");}
-    });
-}
-$(document).on("keydown",function(e){
-    if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA")return;
-    if(e.key==="c"&&(e.ctrlKey||e.metaKey)){e.preventDefault();doCopy();}
-    if(e.key==="v"&&(e.ctrlKey||e.metaKey)){e.preventDefault();doPaste();}
-});
-// 点击表格空白取消选区
-$(document).on("click",function(e){
-    if(!$(e.target).closest("#dataTable td,#dataTable th").length&&!_dragSel.moved)selClear();
-    _dragSel.moved=false;
 });
 
 // 右键菜单加复制/粘贴项
