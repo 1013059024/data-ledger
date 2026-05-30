@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Push road-ledger changes to GitHub via API (no git CLI needed)"""
+"""Push road-ledger to GitHub as a new Release (v2) preserving history"""
 import os, sys, json, base64, urllib.request, ssl
 from datetime import datetime
 
@@ -7,20 +7,23 @@ REPO_DIR = r"E:\reasonix-data\projects\road-ledger"
 OWNER = "1013059024"
 REPO = "road-ledger"
 BRANCH = "main"
+TAG = "v2"
 TOKEN = "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"
 ctx = ssl._create_unverified_context()
 
-def api(method, path, data=None):
+ARCHIVE_EXTS = {'.zip', '.rar', '.7z', '.tar.gz', '.tgz', '.gz'}
+
+def api(method, path, data=None, accept=None):
     url = f"https://api.github.com/repos/{OWNER}/{REPO}{path}"
     headers = {
         'Authorization': f'token {TOKEN}',
         'User-Agent': 'road-ledger-sync',
         'Content-Type': 'application/json',
-        'Accept': 'application/vnd.github.v3+json'
     }
+    headers['Accept'] = accept or 'application/vnd.github.v3+json'
     req = urllib.request.Request(url, headers=headers, method=method)
     if data: req.data = json.dumps(data).encode('utf-8')
-    resp = urllib.request.urlopen(req, timeout=30, context=ctx)
+    resp = urllib.request.urlopen(req, timeout=60, context=ctx)
     return json.loads(resp.read())
 
 def get_or_create_blob(content):
@@ -30,23 +33,35 @@ def get_or_create_blob(content):
     })
     return blob['sha']
 
+def is_archive(fn):
+    for ext in ARCHIVE_EXTS:
+        if fn.endswith(ext): return True
+    return False
+
 def main():
-    print(f"Pushing {REPO_DIR} → {OWNER}/{REPO} ({BRANCH})")
-    
-    # 1. Get current HEAD
+    print(f"📦 推送 {REPO_DIR} → {OWNER}/{REPO} ({BRANCH}) 作为 {TAG} Release\n")
+
+    # ── 1. 获取当前 HEAD ──
     ref = api('GET', f'/git/ref/heads/{BRANCH}')
     current_sha = ref['object']['sha']
     print(f"  HEAD: {current_sha[:10]}")
 
-    # 2. Walk files
-    IGNORE = {'.git', '__pycache__', 'node_modules', '.venv', 'venv',
-              'dist', 'build', '.idea', '.vscode', 'mysql-data',
-              '_tmp', '_backup', '*.pyc', '*.zip'}
+    # ── 2. 遍历本地文件（排除压缩包/数据/缓存）──
+    IGNORE_DIRS = {'.git', '__pycache__', 'node_modules', '.venv', 'venv',
+                   'dist', 'build', '.idea', '.vscode', 'mysql-data',
+                   '_tmp', '_backup'}
     tree_items = []
     for root, dirs, files in os.walk(REPO_DIR):
-        dirs[:] = [d for d in dirs if d not in IGNORE and not d.startswith('.')]
+        rel_root = os.path.relpath(root, REPO_DIR)
+        if rel_root == '.':
+            dirs[:] = [d for d in dirs if d not in IGNORE_DIRS and not d.startswith('.')]
+        else:
+            top_dir = rel_root.split(os.sep)[0]
+            if top_dir in IGNORE_DIRS or top_dir.startswith('.'):
+                dirs.clear(); continue
         for fn in sorted(files):
-            if fn.endswith('.pyc') or '.bak' in fn: continue
+            if fn.endswith('.pyc') or '.bak' in fn or is_archive(fn):
+                continue
             fp = os.path.join(root, fn)
             rel = os.path.relpath(fp, REPO_DIR).replace('\\', '/')
             try:
@@ -57,15 +72,11 @@ def main():
                 'path': rel, 'mode': '100644',
                 'type': 'blob', 'sha': blob_sha
             })
-    
-    print(f"  Files: {len(tree_items)}")
+    print(f"  文件数: {len(tree_items)}")
 
-    # 3. Create tree (with existing tree as base to preserve unmodified files)
-    # First get the current tree to merge
+    # ── 3. 合并远端树（保留远端有但本地未变的文件）──
     current_commit = api('GET', f'/git/commits/{current_sha}')
-    base_tree = api('GET', f'/git/trees/{current_commit["tree"]["sha"]}')
 
-    # Build a dict of existing files from base tree
     existing = {}
     def walk_tree(tree_sha, prefix=''):
         t = api('GET', f'/git/trees/{tree_sha}')
@@ -77,35 +88,88 @@ def main():
                 existing[path] = item['sha']
     walk_tree(current_commit['tree']['sha'])
 
-    # Update with new file hashes & remove files deleted locally
+    # 本地文件覆盖 + 远端已删除的文件清理
     local_paths = {item['path'] for item in tree_items}
     for item in tree_items:
         existing[item['path']] = item['sha']
-    for p in list(existing.keys()):
-        if p not in local_paths:
-            del existing[p]
-            print(f"  Deleted: {p}")
-    
+    deleted = [p for p in existing if p not in local_paths]
+    for p in deleted:
+        del existing[p]
+    if deleted:
+        for p in deleted: print(f"  🗑 删除: {p}")
+
     new_tree_items = [{'path': p, 'mode': '100644', 'type': 'blob', 'sha': s}
                       for p, s in existing.items()]
-    
     new_tree = api('POST', '/git/trees', {'tree': new_tree_items})
-    print(f"  Tree: {new_tree['sha'][:10]}... ({len(new_tree_items)} entries)")
+    print(f"  树: {new_tree['sha'][:10]}... ({len(new_tree_items)} 项)")
 
-    # 4. Create commit
-    msg = f"v2 更新使用手册 + 复制粘贴/锚点展开/列模式等新功能 ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
+    # ── 4. 创建提交 ──
+    commit_msg = (f"v2 更新使用手册 + 复制粘贴/锚点展开/列模式等新功能 "
+                  f"({datetime.now().strftime('%Y-%m-%d %H:%M')})")
     new_commit = api('POST', '/git/commits', {
-        'message': msg,
+        'message': commit_msg,
         'tree': new_tree['sha'],
         'parents': [current_sha]
     })
-    print(f"  Commit: {new_commit['sha'][:10]}")
+    print(f"  提交: {new_commit['sha'][:10]}")
 
-    # 5. Update branch
+    # ── 5. 更新 main 分支 ──
     api('PATCH', f'/git/refs/heads/{BRANCH}', {
         'sha': new_commit['sha'], 'force': True
     })
-    print(f"  ✅ Pushed to {OWNER}/{REPO}")
+    print(f"  ✅ main 分支已更新")
+
+    # ── 6. 创建 Tag ──
+    tagger = {"name": "1013059024", "email": "1013059024@users.noreply.github.com",
+              "date": datetime.utcnow().isoformat() + "Z"}
+    tag_obj = api('POST', '/git/tags', {
+        'tag': TAG,
+        'message': f'Release {TAG}',
+        'object': new_commit['sha'],
+        'type': 'commit',
+        'tagger': tagger
+    })
+    print(f"  Tag 对象: {tag_obj['sha'][:10]}")
+
+    # 创建 tag 引用
+    try:
+        api('POST', '/git/refs', {
+            'ref': f'refs/tags/{TAG}',
+            'sha': new_commit['sha']
+        })
+        print(f"  ✅ Tag {TAG} 已创建")
+    except urllib.error.HTTPError as e:
+        if e.code == 422:
+            print(f"  ⚠️ Tag {TAG} 已存在，强制更新")
+            api('PATCH', f'/git/refs/tags/{TAG}', {
+                'sha': new_commit['sha'], 'force': True
+            })
+        else:
+            raise
+
+    # ── 7. 创建 Release ──
+    try:
+        release = api('POST', '/releases', {
+            'tag_name': TAG,
+            'name': f'v2 - 新版使用手册 + 复制粘贴增强',
+            'body': (
+                '## ✨ 新功能\n\n'
+                '- **Excel 风格粘贴**：选单格作锚点，自动向右/下展开\n'
+                '- **右键粘贴**：行菜单合并复制/粘贴/清除\n'
+                '- **列优先模式**：列头选中 → 粘贴走全列匹配\n'
+                '- **清除内容修复**：单元格选中优先于列残留\n\n'
+                '## 📄 文档\n\n'
+                '- 重写 `使用手册.md`（15 章完整功能说明）\n'
+                '- 重写 `README.md`\n'
+                '- 删除过时的 `PROJECT_MAP.md`\n'
+            ),
+            'draft': False,
+            'prerelease': False
+        })
+        print(f"  ✅ Release {TAG} 已创建: {release['html_url']}")
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        print(f"  ❌ Release 创建失败: {e.code} {body[:200]}")
 
 if __name__ == '__main__':
     main()
