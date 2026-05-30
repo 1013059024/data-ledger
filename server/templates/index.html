@@ -1394,20 +1394,21 @@ function mirrorColSelection(){
     var fields=_colSel.cols;
     $("#tableBody td.editable").each(function(){
         if(fields.indexOf($(this).data("field"))>=0){
-            $(this).addClass("selected-cell");
+            $(this).addClass("col-selected");
         }
     });
     updateSelectionStats();
 }
 function selClearCols(){
     $("#tableHead th.col-head").removeClass("selected-header");
-    $("#tableBody td").removeClass("selected-cell col-selected");
+    $("#tableBody td").removeClass("col-selected selected-cell");
     _colSel={first:null,cols:[]};
     updateSelectionStats();
 }
 // 列头 mousedown → 记录选中的第一个列头
 function colHeadMouseDown(e){
     if(e.button!==0||e.shiftKey||e.ctrlKey||e.metaKey)return;
+    e.preventDefault();  // 防止浏览器选中列头文字
     _colDragging=false;_colMoved=false;
     selClear();
     selClearCols();
@@ -1440,15 +1441,20 @@ function colHeadGlobalMove(e){
     mirrorColSelection();
 }
 // 全局 mouseup → 判定是拖拽还是单击
+var _colProtect=false;
 function colHeadGlobalUp(e){
     if(!_colSel.first)return;
     if(_colMoved){
-        // 拖拽完成，阻止 click 事件干扰
+        // 拖拽完成，阻止 click 事件干扰 + 保护选中不被清除
         _colDragging=false;
+        mirrorColSelection();
+        // 短暂保护列选中不被任何事件误清（如浏览器额外触发的 click）
+        _colProtect=true;
+        setTimeout(function(){_colProtect=false;},200);
         return;
     }
     // 单击：不处理，交由下面的 click 处理
-
+    mirrorColSelection();
 }
 // 列头 click → Shift 范围 / Ctrl 切换 / 普通单选
 $(document).on("click","#tableHead th.col-head",function(e){
@@ -1491,14 +1497,20 @@ function mirrorRowSelection(){
     _rowSel.rows.forEach(function(rid){
         $("#tableBody tr[data-id='"+rid+"']").addClass("row-selected");
     });
+    updateSelectionStats();
 }
+var _rowProtect=false;
 function selClearRows(){
+    if(_rowProtect)return;  // 行选中保护期中不清除
     $("#tableBody tr").removeClass("row-selected");
     _rowSel={active:false,firstRow:null,rows:[]};
 }
 $(document).on("mousedown","td.row-num",function(e){
     if(e.shiftKey||e.ctrlKey||e.metaKey)return;
     e.preventDefault();
+    // 清除已有的列/格选中，避免列高亮残留到行选中
+    selClear();
+    selClearCols();
     var rid=$(this).closest("tr").data("id");
     // 清除已有行选中
     selClearRows();
@@ -1506,6 +1518,7 @@ $(document).on("mousedown","td.row-num",function(e){
     mirrorRowSelection();
 }).on("mousemove",function(e){
     if(!_rowSel.active||!_rowSel.firstRow)return;
+    if(e.buttons===0)return;  // 松开按钮后不再处理拖拽
     var el=document.elementFromPoint(e.clientX,e.clientY);
     var $td=$(el).closest("td.row-num");
     if(!$td.length)return;
@@ -1527,6 +1540,10 @@ $(document).on("mousedown","td.row-num",function(e){
 }).on("mouseup",function(e){
     if(_rowSel.active){
         _rowSel.active=false;
+        mirrorRowSelection();  // 确保视觉与最新选中状态一致
+        // 短暂保护行选中不被任何事件误清
+        _rowProtect=true;
+        setTimeout(function(){_rowProtect=false;},200);
     }
 });
 // 右键菜单（列）
@@ -1612,10 +1629,12 @@ var _copyTable="";
 
 function selClear(){
     if(_dragSel._pt)return; // 拖拽保护中不清除选中
-    $("#tableBody td").removeClass("selected-cell");
+    $("#tableBody td").removeClass("selected-cell col-selected");
     $("#tableBody td .fill-handle").remove();
     $("#tableHead th").removeClass("selected-header");
     _sel={active:false,cells:[],fields:[],firstTd:null};
+    // 同时清除行选中：单击空白处应清掉全部选中状态
+    selClearRows();
     updateSelectionStats();
 }
 
@@ -1632,6 +1651,12 @@ function updateSelectionStats(){
                 cells.push(this);
             }
         });
+    }
+    // Row selection fallback
+    if(!cells.length&&_rowSel&&_rowSel.rows.length){
+        var txt=_rowSel.rows.length+" 行已选中";
+        $info.text(txt);$bar.show();
+        return;
     }
     if(!cells.length){$bar.hide();return;}
     var rows={};var fields={};var sum=0;var numCount=0;
@@ -1666,7 +1691,7 @@ $(document).on("mousedown","td.editable",function(e){
     var idxS=$tds.index(_dragSel.startTd),idxC=$tds.index($td);
     if(idxS<0||idxC<0)return;
     var r1=Math.floor(idxS/nc),c1=idxS%nc,r2=Math.floor(idxC/nc),c2=idxC%nc;
-    $("#tableBody td").removeClass("selected-cell");
+    $("#tableBody td").removeClass("selected-cell col-selected");
     $("#tableBody td .fill-handle").remove();
     _sel={active:true,cells:[],fields:[],firstTd:_dragSel.startTd};
     for(var r=Math.min(r1,r2);r<=Math.max(r1,r2);r++)
@@ -1686,11 +1711,12 @@ $(document).on("mousedown","td.editable",function(e){
     }
     if(_dragSel.active){
         _dragSel.active=false;
-        // 非拖拽 -> 单击/Shift单击
+        // 非拖拽 -> 单击/Shift单击，同时清除行选中
+        selClearRows();
         if($td.length){
             if(e.shiftKey && _sel.firstTd){
                 var ft=_sel.firstTd;if($td.is($(ft)))return;
-                $("#tableBody td").removeClass("selected-cell");
+                $("#tableBody td").removeClass("selected-cell col-selected");
                 $("#tableBody td .fill-handle").remove();
                 var $tds=$("#tableBody td.editable"),nc=selCols();
                 var idx1=$tds.index(ft),idx2=$tds.index($td);
@@ -1702,7 +1728,7 @@ $(document).on("mousedown","td.editable",function(e){
                     }
                 _sel.fields=_sel.cells.map(function(td){return td.data("field");}).filter(function(v,i,a){return a.indexOf(v)===i;});
             }else if(!e.shiftKey){
-                $("#tableBody td").removeClass("selected-cell");
+                $("#tableBody td").removeClass("selected-cell col-selected");
                 $("#tableBody td .fill-handle").remove();
                 $td.addClass("selected-cell");
                 _sel={active:true,cells:[$td],fields:[$td.data("field")],firstTd:$td[0]};
@@ -1803,7 +1829,7 @@ $(document).on("keydown",function(e){
 
 // 点击空白取消选区
 $(document).on("click",function(e){
-    if(!$(e.target).closest("#dataTable td,#dataTable th").length)selClear();
+    if(!$(e.target).closest("#dataTable td,#dataTable th").length&&!_colProtect)selClear();
 });
 
 
@@ -1942,7 +1968,7 @@ $(document).on("keydown",function(e){
 });
 // 点击表格空白取消选区
 $(document).on("click",function(e){
-    if(!$(e.target).closest("#dataTable td,#dataTable th").length&&!_dragSel.moved)selClear();
+    if(!$(e.target).closest("#dataTable td,#dataTable th").length&&!_dragSel.moved&&!_colProtect)selClear();
     _dragSel.moved=false;
 });
 

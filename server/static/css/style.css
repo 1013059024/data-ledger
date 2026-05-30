@@ -236,6 +236,10 @@ td.selected-cell {
 th.selected-header {
     background: #d4edda !important;
 }
+/* 列选中时单元格的视觉指示（浅蓝边框，非整列填充） */
+td.col-selected {
+    background: #e8f4ff !important;
+}
 
 /* 选中行 */
 tr.row-selected td {
