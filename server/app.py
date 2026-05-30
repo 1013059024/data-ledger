@@ -353,6 +353,19 @@ def api_unhide_rows(table_name):
         return jsonify({"code": 1, "msg": f"恢复失败: {e}"})
 
 
+@app.route("/api/table/<table_name>/row/<int:row_id>/table-delete", methods=["POST"])
+def api_table_delete_row(table_name, row_id):
+    """表删除：从当前表视图移除，保留 DB 记录（_deleted=2，不在隐藏列表显示）"""
+    try:
+        schema = get_schema(table_name)
+        if not any(s["field"] == "_deleted" for s in schema):
+            execute(f"ALTER TABLE `{table_name}` ADD COLUMN `_deleted` TINYINT DEFAULT 0")
+        execute(f"UPDATE `{table_name}` SET `_deleted`=2 WHERE `id`=%s", (row_id,))
+        return jsonify({"code": 0, "msg": "已从本表移除"})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"表删除失败: {e}"})
+
+
 @app.route("/api/table/<table_name>/hidden-count", methods=["GET"])
 def api_hidden_count(table_name):
     try:
@@ -372,9 +385,65 @@ def api_hidden_rows(table_name):
         has_del = any(s["field"] == "_deleted" for s in schema)
         if not has_del: return jsonify({"code": 0, "data": []})
         rows = query(f"SELECT * FROM `{table_name}` WHERE IFNULL(`_deleted`,0)=1")
+        # 计算每条隐藏行在默认 id 排序下的序号
+        for r in rows:
+            rid = r["id"]
+            cnt = query_one(f"SELECT COUNT(*) AS c FROM `{table_name}` WHERE IFNULL(`_deleted`,0) NOT IN (1,2) AND `id`<%s", (rid,))
+            r["_seq"] = (cnt["c"] if cnt else 0) + 1
         return jsonify({"code": 0, "data": rows})
     except Exception as e:
         return jsonify({"code": 1, "msg": str(e)})
+
+
+@app.route("/api/table/<table_name>/deleted-rows", methods=["GET"])
+def api_deleted_rows(table_name):
+    """获取表删除的记录（_deleted=2），带序号"""
+    try:
+        schema = get_schema(table_name)
+        has_del = any(s["field"] == "_deleted" for s in schema)
+        if not has_del: return jsonify({"code": 0, "data": []})
+        rows = query(f"SELECT * FROM `{table_name}` WHERE IFNULL(`_deleted`,0)=2")
+        for r in rows:
+            rid = r["id"]
+            cnt = query_one(f"SELECT COUNT(*) AS c FROM `{table_name}` WHERE IFNULL(`_deleted`,0)=2 AND `id`<%s", (rid,))
+            r["_seq"] = (cnt["c"] if cnt else 0) + 1
+        return jsonify({"code": 0, "data": rows})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": str(e)})
+
+
+@app.route("/api/table/<table_name>/all-rows", methods=["GET"])
+def api_all_rows(table_name):
+    """返回表内所有记录（含隐藏/表删除），带状态标记"""
+    try:
+        schema = get_schema(table_name)
+        has_del = any(s["field"] == "_deleted" for s in schema)
+        rows = query(f"SELECT * FROM `{table_name}` ORDER BY `id`")
+        for r in rows:
+            r["_del_status"] = ""
+            if has_del:
+                dv = r.get("_deleted")
+                if dv == 1: r["_del_status"] = "隐藏"
+                elif dv == 2: r["_del_status"] = "表删除"
+        return jsonify({"code": 0, "data": rows, "schema": schema})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": str(e)})
+
+
+@app.route("/api/table/<table_name>/rows/un-table-delete", methods=["POST"])
+def api_un_table_delete_rows(table_name):
+    """恢复表删除的行（_deleted=2 → 0）"""
+    d = request.get_json()
+    ids = d.get("ids", [])
+    try:
+        if ids:
+            ph = ",".join(["%s"] * len(ids))
+            execute(f"UPDATE `{table_name}` SET `_deleted`=0 WHERE `id` IN ({ph})", ids)
+        else:
+            execute(f"UPDATE `{table_name}` SET `_deleted`=0 WHERE `_deleted`=2")
+        return jsonify({"code": 0, "msg": "已恢复"})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"恢复失败: {e}"})
 
 
 # ── 列隐藏 ──────────────────────────────────────────
@@ -703,6 +772,7 @@ def api_table(table_name):
     if not s: return jsonify({"code": 1, "msg": f"表 {table_name} 不存在"})
     p = request.args.get("page", 1, type=int)
     pp = request.args.get("per_page", 50, type=int)
+    show_all = request.args.get("show_all", 0, type=int)
     filters_json = request.args.get("filters", default=None, type=str)
     filters = None
     if filters_json:
@@ -711,11 +781,12 @@ def api_table(table_name):
     total, rows = get_page(table_name, p, pp,
         request.args.get("search", "", type=str),
         request.args.get("order_field", default=None, type=str),
-        request.args.get("order_dir", default="asc", type=str), hide_deleted=True, filters=filters)
+        request.args.get("order_dir", default="asc", type=str), hide_deleted=not show_all, filters=filters)
     r = query_one("SELECT TABLE_COMMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s", (DB_CONFIG["database"], table_name))
     comment = r["TABLE_COMMENT"] if r else ""
-    s = [c for c in s if c["field"] != "_deleted"]
-    rows = [{k:v for k,v in row.items() if k != "_deleted"} for row in rows]
+    if not show_all:
+        s = [c for c in s if c["field"] != "_deleted"]
+        rows = [{k:v for k,v in row.items() if k != "_deleted"} for row in rows]
     return jsonify({"code": 0, "data": {"name": table_name, "comment": comment, "schema": s,
         "pk": get_pk_column(table_name), "total": total, "page": p, "per_page": pp, "rows": _serialize_rows(rows)}})
 
@@ -1382,6 +1453,38 @@ def api_backup_delete():
 
 # ========== 数据库整体导出/导入 ==========
 
+@app.route("/api/database/overview", methods=["GET"])
+def api_db_overview():
+    """返回数据库概览：所有表名、行数、隐藏/删除数、字段数"""
+    try:
+        from db import get_tables, get_schema, get_pk_column, query
+        tables = get_tables()
+        result = []
+        for t in tables:
+            name = t["name"]
+            comment = t.get("comment", "")
+            schema = get_schema(name)
+            pk = get_pk_column(name) or "id"
+            # 统计行数
+            cnt = query_one(f"SELECT COUNT(*) AS c FROM `{name}`")["c"]
+            # 统计隐藏和表删除
+            hidden = 0; deleted = 0
+            if any(s["field"] == "_deleted" for s in schema):
+                deleted = query_one(f"SELECT COUNT(*) AS c FROM `{name}` WHERE `_deleted`=2")["c"]
+                hidden = query_one(f"SELECT COUNT(*) AS c FROM `{name}` WHERE `_deleted`=1")["c"]
+            result.append({
+                "name": name,
+                "comment": comment,
+                "columns": len([s for s in schema if s["field"] not in ("id", "_deleted")]),
+                "total_rows": cnt,
+                "hidden_rows": hidden,
+                "deleted_rows": deleted,
+                "pk": pk,
+            })
+        return jsonify({"code": 0, "data": result})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": str(e)})
+
 @app.route("/api/database/export", methods=["GET"])
 def api_db_export():
     """导出整个数据库为单一 JSON 文件"""
@@ -1409,6 +1512,22 @@ def api_db_export():
         return jsonify({"code": 1, "msg": f"导出失败: {str(e)}"})
 
 
+def _import_db_json(data):
+    """从 JSON dict 恢复整个数据库（内部复用）"""
+    from db import import_tables
+    ok, fail, errors = import_tables(data["tables"], drop_existing=True)
+    if "configs" in data:
+        cfg = data["configs"]
+        if "key_fields" in cfg and isinstance(cfg["key_fields"], dict):
+            _save_kf(cfg["key_fields"])
+        if "mappings" in cfg and isinstance(cfg["mappings"], list):
+            _save_m(cfg["mappings"])
+        if "groups" in cfg and isinstance(cfg["groups"], list):
+            _save_g(cfg["groups"])
+    _save_table_manifest()
+    return ok, fail, errors
+
+
 @app.route("/api/database/import", methods=["POST"])
 def api_db_import():
     """从 JSON 文件导入恢复整个数据库"""
@@ -1426,21 +1545,7 @@ def api_db_import():
     if not isinstance(data, dict) or "tables" not in data:
         return jsonify({"code": 1, "msg": "无效的备份文件格式"})
 
-    from db import import_tables
-    ok, fail, errors = import_tables(data["tables"], drop_existing=True)
-
-    # 恢复配置
-    if "configs" in data:
-        cfg = data["configs"]
-        if "key_fields" in cfg and isinstance(cfg["key_fields"], dict):
-            _save_kf(cfg["key_fields"])
-        if "mappings" in cfg and isinstance(cfg["mappings"], list):
-            _save_m(cfg["mappings"])
-        if "groups" in cfg and isinstance(cfg["groups"], list):
-            _save_g(cfg["groups"])
-
-    _save_table_manifest()
-
+    ok, fail, errors = _import_db_json(data)
     msg = f"成功恢复 {ok} 张表"
     if fail:
         msg += f"，{fail} 张表失败"

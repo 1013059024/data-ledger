@@ -53,7 +53,7 @@ def distinct_values(tn, field, search="", filters=None):
     conds = []; pa = []
     has_del = any(s["field"] == "_deleted" for s in schema)
     if has_del:
-        conds.append("IFNULL(`_deleted`,0) != 1")
+        conds.append("IFNULL(`_deleted`,0) NOT IN (1,2)")
     # 级联筛选：排除自身字段，用其他字段的筛选值做条件
     if filters and isinstance(filters, dict):
         for fld, vals in filters.items():
@@ -65,8 +65,8 @@ def distinct_values(tn, field, search="", filters=None):
         conds.append(f"`{field}` LIKE %s")
         pa.append(f"%{search}%")
     ws = " WHERE " + " AND ".join(conds) if conds else ""
-    rows = query(f"SELECT DISTINCT `{field}` AS v FROM `{tn}`{ws} ORDER BY `{field}`", pa)
-    return [r["v"] for r in rows if r["v"] is not None]
+    rows = query(f"SELECT `{field}` AS v, COUNT(*) AS c FROM `{tn}`{ws} GROUP BY `{field}` ORDER BY `{field}`", pa)
+    return [{"value": r["v"], "count": r["c"]} for r in rows if r["v"] is not None]
 
 
 def get_page(tn, page=1, per_page=50, search="", order_field=None, order_dir="asc", hide_deleted=False, filters=None):
@@ -79,7 +79,7 @@ def get_page(tn, page=1, per_page=50, search="", order_field=None, order_dir="as
     # 筛选条件
     conds = []
     if hide_deleted and has_del:
-        conds.append("IFNULL(`_deleted`,0) != 1")
+        conds.append("IFNULL(`_deleted`,0) NOT IN (1,2)")
     if filters and isinstance(filters, dict):
         for fld, vals in filters.items():
             if fld in fields and vals and isinstance(vals, list) and len(vals):

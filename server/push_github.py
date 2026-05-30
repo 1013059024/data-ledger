@@ -40,12 +40,13 @@ def main():
 
     # 2. Walk files
     IGNORE = {'.git', '__pycache__', 'node_modules', '.venv', 'venv',
-              'dist', 'build', '.idea', '.vscode', '*.pyc'}
+              'dist', 'build', '.idea', '.vscode', 'mysql-data',
+              '_tmp', '_backup', '*.pyc', '*.zip'}
     tree_items = []
     for root, dirs, files in os.walk(REPO_DIR):
         dirs[:] = [d for d in dirs if d not in IGNORE and not d.startswith('.')]
         for fn in sorted(files):
-            if fn.endswith('.pyc'): continue
+            if fn.endswith('.pyc') or '.bak' in fn: continue
             fp = os.path.join(root, fn)
             rel = os.path.relpath(fp, REPO_DIR).replace('\\', '/')
             try:
@@ -76,9 +77,14 @@ def main():
                 existing[path] = item['sha']
     walk_tree(current_commit['tree']['sha'])
 
-    # Update with new file hashes
+    # Update with new file hashes & remove files deleted locally
+    local_paths = {item['path'] for item in tree_items}
     for item in tree_items:
         existing[item['path']] = item['sha']
+    for p in list(existing.keys()):
+        if p not in local_paths:
+            del existing[p]
+            print(f"  Deleted: {p}")
     
     new_tree_items = [{'path': p, 'mode': '100644', 'type': 'blob', 'sha': s}
                       for p, s in existing.items()]
@@ -87,7 +93,7 @@ def main():
     print(f"  Tree: {new_tree['sha'][:10]}... ({len(new_tree_items)} entries)")
 
     # 4. Create commit
-    msg = f"Auto-sync {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    msg = f"v2 更新使用手册 + 复制粘贴/锚点展开/列模式等新功能 ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
     new_commit = api('POST', '/git/commits', {
         'message': msg,
         'tree': new_tree['sha'],
