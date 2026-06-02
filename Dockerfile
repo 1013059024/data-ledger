@@ -31,4 +31,4 @@ RUN cd server && \
 # ── 输出阶段 ──
 # scratch 是空镜像，只复制二进制文件
 FROM scratch AS output
-COPY --from=builder /build/server/dist/数据台账系统 /
+COPY --from=builder /build/server/dist/数据台账系统 /dist/
