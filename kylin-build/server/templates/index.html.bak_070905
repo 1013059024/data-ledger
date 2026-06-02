@@ -1,0 +1,1687 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>数据台账系统</title>
+<link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+<meta name="del-token" content="{{ del_token }}">
+<link href="/static/css/style.css" rel="stylesheet">
+<style>.table-bordered td:empty::before{content:"\00a0";display:block;}</style></head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+<div class="container-fluid">
+<a class="navbar-brand" href="/">🛣️ 数据台账系统</a>
+<span class="navbar-text text-white-50 small"><span id="tableCount" class="badge bg-light text-primary">0 张表</span> <span id="saveStatus" class="badge bg-success ms-1" style="cursor:default" title="数据已保存到数据库">✅ 已保存</span></span>
+<div class="ms-auto d-flex gap-2">
+<button class="btn btn-outline-light btn-sm" id="syncBtn">🔗 映射</button>
+<button class="btn btn-light btn-sm" id="uploadBtn">📤 导入</button>
+<button class="btn btn-outline-light btn-sm" id="dbBackupBtn">💾 备份</button>
+</div></div></nav>
+<div class="sidebar"><div class="p-3 border-bottom bg-light d-flex justify-content-between align-items-center"><h6 class="mb-0 fw-bold">📋 数据表</h6><div class="d-flex gap-1"><button class="btn btn-sm btn-outline-primary" id="createTableBtn" title="新建表格">＋新建</button><button class="btn btn-sm btn-outline-secondary" id="groupManageBtn" title="管理分组">⚙️</button><button class="btn btn-sm btn-outline-danger" id="recycleBinBtn" title="回收站">🗑️</button></div></div>
+<div class="list-group list-group-flush" id="tableList"><div class="text-center text-muted py-4 spinner-border spinner-border-sm"></div></div></div>
+<div class="main-content">
+<div class="empty-state" id="emptyState"><div class="icon">📂</div><h5>还没有数据表</h5><p class="text-muted">点击左侧 <strong>「＋新建」</strong> 或者右上角 <strong>「📤 导入」</strong></p></div>
+<div id="tableView" style="display:none">
+<div class="d-flex justify-content-between align-items-center mb-3">
+<div><h4 class="mb-0"><span id="tableName"></span>
+<button class="btn btn-sm btn-outline-secondary ms-2" id="renameTableBtn">✏️</button><button class="btn btn-sm btn-outline-danger ms-1" id="deleteTableBtn">🗑️</button></h4>
+<span class="text-muted small" id="totalRecords"></span>
+<span class="text-muted small ms-3">🔑 <span id="keyFieldDisplay">—</span></span></div>
+<div class="d-flex gap-2"><input type="text" id="searchInput" class="form-control form-control-sm" placeholder="搜索..." style="width:200px">
+<button class="btn btn-sm btn-outline-warning" id="clearAllFiltersBtn" style="display:none" title="清除所有筛选">🧹 筛选</button>
+<button class="btn btn-sm btn-outline-success" id="exportBtn">📥 导出</button>
+<button class="btn btn-sm btn-outline-info" id="backfillBtn">📥 补填</button>
+<button class="btn btn-sm btn-outline-secondary" id="beautifyBtn">📐 美化</button>
+<button class="btn btn-sm btn-outline-primary" id="aggregateBtn">📊 汇总</button>
+<button class="btn btn-sm btn-outline-primary" id="groupSummaryBtn">📋 分类汇总</button>
+<button class="btn btn-sm btn-outline-secondary" id="refreshBtn">🔄</button></div></div>
+<div class="table-responsive"><table class="table table-bordered table-hover table-sm" id="dataTable" style="border-collapse:collapse"><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table></div>
+<!-- 筛选下拉面板 -->
+<div id="filterDropdown" class="filter-dropdown" style="display:none">
+  <div class="filter-dropdown-header">
+    <b id="filterFieldName">筛选</b>
+    <span class="filter-dropdown-close" style="cursor:pointer">&times;</span>
+  </div>
+  <div class="filter-dropdown-search"><input type="text" class="form-control form-control-sm" id="filterSearchInput" placeholder="搜索值..."></div>
+  <div class="filter-dropdown-body" id="filterValueList"></div>
+  <div class="filter-dropdown-footer">
+    <button class="btn btn-sm btn-outline-primary" id="filterSelectAll">全选</button>
+    <button class="btn btn-sm btn-outline-secondary" id="filterDeselectAll">取消</button>
+    <div class="float-end">
+      <button class="btn btn-sm btn-primary" id="filterOkBtn">确定</button>
+      <button class="btn btn-sm btn-outline-danger" id="filterClearBtn">清除</button>
+    </div>
+  </div>
+</div>
+<nav><ul class="pagination pagination-sm justify-content-center" id="pageUl"></ul></nav></div></div>
+
+<div class="modal fade" id="uploadModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">📤 选择文件</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body"><input type="file" class="form-control mb-3" id="fileInput" accept=".xlsx,.xls,.csv">
+<div class="progress mt-3 d-none" id="uploadProgress"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:100%">解析中...</div></div>
+<div id="uploadResult" class="mt-2"></div></div>
+<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" id="submitUpload">解析文件</button></div>
+</div></div></div>
+
+<div class="modal fade" id="importModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">📋 配置导入</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body"><div class="alert alert-success" id="parseInfo"></div>
+<div class="mb-2"><label class="form-label fw-bold">📝 表格标题</label><input type="text" class="form-control" id="tableTitleInput" placeholder="自动提取文件名或Sheet名"></div>
+<div class="mb-2"><label class="form-label fw-bold">① 工作表</label><select class="form-select" id="sheetSelect"></select></div>
+<div class="row mb-3"><div class="col-md-7"><label class="form-label fw-bold">② 导入的列</label><div id="fieldCheckboxes" class="border rounded p-2" style="max-height:240px;overflow-y:auto"></div></div>
+<div class="col-md-5"><label class="form-label fw-bold">③ 关键字段</label><select class="form-select" id="keyFieldSelect"></select><div class="small text-muted mt-1">只导入该字段非空的行</div></div></div>
+<label class="form-label fw-bold">④ 预览</label><div class="table-responsive"><table class="table table-bordered table-sm" id="previewTable"><thead id="previewHead"></thead><tbody id="previewBody"></tbody></table></div>
+<div class="row mt-2"><div class="col"><div id="importResult"></div></div><div class="col-auto"><span class="text-muted small">表头从</span><input type="number" class="form-control form-control-sm d-inline-block" id="headerRowStart" value="1" min="1" max="5" style="width:60px"><span class="text-muted small mx-1">到</span><input type="number" class="form-control form-control-sm d-inline-block" id="headerRowEnd" value="1" min="1" max="5" style="width:60px"><span class="text-muted small ms-1">行</span></div></div>
+</div><div class="modal-footer"><button class="btn btn-secondary" id="cancelImport">取消</button><button class="btn btn-primary" id="confirmImport">确认导入</button></div></div></div></div>
+
+<div class="modal fade" id="renameModal" tabindex="-1"><div class="modal-dialog modal-sm modal-dialog-centered"><div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">✏️ 重命名</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body"><input type="text" class="form-control" id="renameInput"><div id="renameResult" class="mt-2"></div></div>
+<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" id="confirmRename">确认</button></div></div></div></div>
+
+<div class="modal fade" id="deleteModal" tabindex="-1"><div class="modal-dialog modal-sm modal-dialog-centered"><div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">⚠️ 删除</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body">确定删除 <strong id="deleteTableName"></strong>？<br><span class="text-danger fw-bold">不可恢复！</span></div>
+<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-danger" id="confirmDelete">确认</button></div></div></div></div>
+
+<div class="modal fade" id="syncModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">🔗 字段映射同步</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body">
+<p class="small text-muted">编辑任一表的单元格时，自动同步到其他表相同项目（关键字段值相等）的对应字段。不同名的字段也能映射。</p>
+<div id="syncList"></div>
+<hr><h6>新建映射</h6>
+<div class="row g-2 mb-2">
+<div class="col-md-3"><select class="form-select form-select-sm" id="syncSrcTable"><option value="">源表</option></select></div>
+<div class="col-md-3"><select class="form-select form-select-sm" id="syncTgtTable"><option value="">目标表</option></select></div>
+<div class="col-md-3"><select class="form-select form-select-sm" id="syncKeyField"><option value="">关键字段</option></select></div>
+<div class="col-md-3"><button class="btn btn-sm btn-outline-success w-100" id="syncLoadPairsBtn">⟳ 加载字段对</button></div></div>
+<div id="syncPairs"></div>
+<div class="d-flex justify-content-between align-items-center mt-2">
+  <button class="btn btn-sm btn-outline-warning" id="syncVerifyBtn">🔍 核实</button>
+  <div id="syncVerifySummary" class="small"></div>
+</div>
+<button class="btn btn-sm btn-outline-secondary" id="syncCancelEdit" style="display:none">取消编辑</button>
+<div id="syncVerifyResult" class="mt-1" style="max-height:320px;overflow-y:auto"></div>
+<div id="syncResult" class="mt-2"></div></div>
+<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">关闭</button><button class="btn btn-primary" id="syncSaveBtn">保存映射</button></div>
+</div></div></div>
+
+<div class="modal fade" id="recordModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">📋 数据库记录</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body"><div id="recordContent"></div></div></div></div></div>
+
+<div class="modal fade" id="groupModal" tabindex="-1"><div class="modal-dialog modal-sm modal-dialog-centered"><div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">📁 管理分组</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body" id="groupBody"></div>
+<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">关闭</button><button class="btn btn-primary" id="groupSaveBtn">保存</button></div>
+</div></div></div>
+
+<div class="modal fade" id="createTableModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">＋ 新建数据表</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body">
+<div class="mb-3"><label class="form-label fw-bold">表名</label><input type="text" class="form-control" id="newTableName" placeholder="如：农村公路_2024"></div>
+<div class="mb-2 d-flex justify-content-between align-items-center"><label class="form-label fw-bold mb-0">字段定义（可选）</label><button class="btn btn-sm btn-outline-primary" id="addColumnBtn">＋添加字段</button></div>
+<div id="columnDefs"></div>
+<div class="mb-3" id="keyFieldGroup" style="display:none">
+<label class="form-label fw-bold">关键字段（唯一标识，用于跨表同步）</label>
+<select class="form-select" id="newKeyField"><option value="">— 不设置 —</option></select>
+</div>
+<div id="createTableResult" class="mt-2"></div>
+</div>
+<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" id="confirmCreateTable">确认创建</button></div>
+</div></div></div>
+
+<div class="modal fade" id="aggregateModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">📊 多表汇总</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body">
+  <div class="mb-3"><label class="form-label fw-bold">① 选择要汇总的表</label>
+    <div id="aggregateTableList" class="border rounded p-2" style="max-height:150px;overflow-y:auto"></div>
+  </div>
+  <div class="mb-3"><label class="form-label fw-bold">② 选择关键字段（汇总依据）</label>
+    <select class="form-select" id="aggregateKeyField"><option value="">— 选择 —</option></select>
+  </div>
+  <div class="mb-3"><label class="form-label fw-bold">③ 新表名</label>
+    <input type="text" class="form-control" id="aggregateNewName" placeholder="如：2024年农村公路汇总表">
+  </div>
+  <div id="aggregatePreview" class="mb-2" style="display:none">
+    <label class="form-label fw-bold">预览（前100行）</label>
+    <div class="table-responsive" style="max-height:300px"><table class="table table-bordered table-sm" id="aggregatePreviewTable" style="border-collapse:collapse"><thead></thead><tbody></tbody></table></div>
+    <div class="small text-muted mt-1" id="aggregateTotal"></div>
+  </div>
+  <div id="aggregateResult" class="mt-2"></div>
+</div>
+<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">关闭</button><button class="btn btn-primary" id="confirmAggregate" disabled>创建汇总表</button></div>
+</div></div></div>
+
+<div class="modal fade" id="recycleBinModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">🗑️ 回收站</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body">
+  <p class="small text-muted">删表时自动备份到 _backup/，可在此恢复最近 30 天内删除的表。</p>
+  <div id="recycleBinList"><div class="text-center py-4"><span class="spinner-border spinner-border-sm"></span> 加载中...</div></div>
+</div>
+<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">关闭</button></div>
+</div></div></div>
+
+<div class="modal fade" id="groupSummaryModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">📋 分类汇总</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body">
+  <div class="alert alert-info small">按所选字段分组，对指定字段计数或求和，结果存为新表。</div>
+  <div class="mb-3"><label class="form-label fw-bold">① 分组字段</label>
+    <select class="form-select" id="gsGroupField"><option value="">— 选择 —</option></select>
+  </div>
+  <div class="mb-3"><label class="form-label fw-bold">② 汇总项</label>
+    <div id="gsAggList" class="border rounded p-2 mb-2" style="min-height:60px">
+      <div class="text-muted small" id="gsNoAgg">暂无汇总项，点击下方添加</div>
+    </div>
+    <div class="row g-2 align-items-center">
+      <div class="col-md-5"><select class="form-select form-select-sm" id="gsAggField"><option value="">选择字段</option></select></div>
+      <div class="col-md-3"><select class="form-select form-select-sm" id="gsAggType"><option value="count">计数</option><option value="sum">求和</option></select></div>
+      <div class="col-md-4"><input type="text" class="form-control form-control-sm" id="gsAggAlias" placeholder="别名（可选）"></div>
+    </div>
+    <button class="btn btn-sm btn-outline-primary mt-2" id="gsAddAgg">＋ 添加汇总项</button>
+  </div>
+  <div class="mb-2"><label class="form-label fw-bold">③ 新表名称</label>
+    <input type="text" class="form-control" id="gsTableName" placeholder="自动生成">
+  </div>
+  <div id="gsResult" class="mt-2"></div>
+</div>
+<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" id="gsConfirmBtn" disabled>生成汇总表</button></div>
+</div></div></div>
+
+<div id="rowMenu" class="context-menu"><div class="context-menu-item" data-action="insert">⬇ 插入空行</div><div class="context-menu-item" data-action="view-record">📋 查看数据库记录</div><div class="context-menu-item" data-action="hide-row">👁 在本表隐藏</div><div class="context-menu-item" data-action="hide-selected-rows">👁 隐藏已选行</div><div class="context-menu-item" data-action="delete-row">🔥 从数据库删除</div></div>
+<div id="colMenu" class="context-menu"><div class="context-menu-info small text-muted px-3 py-1" id="colTypeInfo"></div><div class="context-menu-item" data-action="toggle-key-field">🔑 设为核心字段</div><div class="context-menu-item" data-action="change-type">🔧 修改数据类型</div><div class="context-menu-item" data-action="hide-col">👁 隐藏本列</div><div class="context-menu-item" data-action="insert-col">➕ 插入列（右侧）</div><div class="context-menu-item" data-action="reorder-cols">📝 调整字段顺序</div><div class="context-menu-item" data-action="delete-col">🗑 删除本列</div></div>
+
+<div class="modal fade" id="dbBackupModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">💾 数据库备份与恢复</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body">
+  <div class="alert alert-info small">导出整个数据库为单一 JSON 文件，可随时恢复。</div>
+  <div class="d-grid gap-2">
+    <button class="btn btn-primary btn-lg" id="exportDbBtn">⬇ 导出数据库</button>
+    <div class="text-center text-muted small my-1">或</div>
+    <label class="btn btn-outline-primary btn-lg" for="importDbInput" style="cursor:pointer">⬆ 导入数据库（从备份文件恢复）</label>
+    <input type="file" id="importDbInput" accept=".json" style="display:none">
+    <div id="dbBackupResult" class="mt-2 small"></div>
+  </div>
+</div>
+<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">关闭</button></div>
+</div></div></div>
+
+<div class="modal fade" id="reorderModal" tabindex="-1"><div class="modal-dialog modal-sm modal-dialog-centered"><div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">📝 调整字段顺序</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body"><div class="list-group" id="reorderList"></div></div>
+<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" id="confirmReorder">保存顺序</button></div>
+</div></div></div>
+
+<script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+<script>
+let ct="",cp=1,sid="",ah=[],pd=[],ls=false,ftypes={},_importFilename="",_recordChanges={},_currentKf="",_saveTimer=null,
+    _delToken=$("meta[name='del-token']").attr("content")||""; const PP=50;
+
+// ── 保存状态指示器 ──────────────────────────────────
+function setSaveStatus(state, msg){
+    var el=$("#saveStatus");
+    if(state==="saved"){
+        el.removeClass("bg-warning bg-info").addClass("bg-success").html("✅ 已保存").attr("title","数据已保存到数据库");
+    }else if(state==="saving"){
+        el.removeClass("bg-success bg-warning").addClass("bg-info").html("⏳ 保存中...").attr("title","正在保存数据到数据库");
+    }else if(state==="editing"){
+        el.removeClass("bg-success bg-info").addClass("bg-warning").html("✏️ 编辑中...").attr("title","当前有未完成的编辑");
+    }
+}
+// 跟踪所有 AJAX 请求，自动切换保存状态
+$(document).ajaxSend(function(){setSaveStatus("saving");});
+$(document).ajaxComplete(function(){
+    clearTimeout(_saveTimer);
+    _saveTimer=setTimeout(function(){setSaveStatus("saved");},300);
+});
+
+const M={u:new bootstrap.Modal(document.getElementById("uploadModal")),i:new bootstrap.Modal(document.getElementById("importModal")),r:new bootstrap.Modal(document.getElementById("renameModal")),d:new bootstrap.Modal(document.getElementById("deleteModal")),s:new bootstrap.Modal(document.getElementById("syncModal"))};
+
+var _groups=[],_allTables=[];
+
+function lt(sn){
+    $.getJSON("/api/tables",function(r){
+        if(r.code)return;
+        _allTables=r.data;
+        if(!_allTables.length){
+            $("#tableList").html('<div class="text-center text-muted py-4">暂无</div>');
+            $("#tableCount").text("0 张表");return;
+        }
+        $("#tableCount").text(_allTables.length+" 张表");
+        $.getJSON("/api/table-groups",function(gr){
+            if(gr.code===0)_groups=gr.data;
+            renderSidebar(sn);
+        });
+    });
+}
+
+function renderSidebar(sn){
+    var l=$("#tableList").empty();
+    var grouped={},used={};
+    _groups.forEach(function(g){
+        grouped[g.name]=g.tables||[];
+        (g.tables||[]).forEach(function(t){used[t]=true;});
+    });
+    var ungrouped=_allTables.filter(function(t){return !used[t.name];});
+    // 渲染分组
+    _groups.forEach(function(g){
+        var gTables=_allTables.filter(function(t){return grouped[g.name].indexOf(t.name)>=0;});
+        if(!gTables.length&&!ungrouped.length)return;
+        var gid='g_'+g.name.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g,'_');
+        l.append('<div class="group-header" data-target="#'+gid+'" data-toggle="collapse" aria-expanded="true">'
+            +'<span class="group-toggle">▼</span> '+g.name+' <span class="text-muted small">('+gTables.length+')</span></div>'
+            +'<div class="group-body show" id="'+gid+'"></div>');
+        var gb=l.find('#'+gid);
+        gTables.forEach(function(t){
+            var a=$('<a class="list-group-item list-group-item-action">📄 '+t.name+'</a>');
+            a.click(function(){$(".list-group-item").removeClass("active");a.addClass("active");loadTable(t.name);});
+            if(t.name===sn){a.addClass("active");loadTable(t.name);}
+            gb.append(a);
+        });
+    });
+    // 未分组
+    if(ungrouped.length){
+        l.append('<div class="group-header text-muted"><span class="group-toggle">▼</span> 未分组 <span class="text-muted small">('+ungrouped.length+')</span></div>'
+            +'<div class="group-body show"></div>');
+        var gb=l.find('.group-body:last');
+        ungrouped.forEach(function(t){
+            var a=$('<a class="list-group-item list-group-item-action">📄 '+t.name+'</a>');
+            a.click(function(){$(".list-group-item").removeClass("active");a.addClass("active");loadTable(t.name);});
+            if(t.name===sn){a.addClass("active");loadTable(t.name);}
+            gb.append(a);
+        });
+    }
+    if(!sn&&!ct)l.find('.list-group-item').first().click();
+    // 折叠切换
+    $(".group-header").off("click").on("click",function(){
+        var $t=$(this),$b=$t.next(".group-body");
+        $b.toggleClass("show");
+        $t.find(".group-toggle").text($b.hasClass("show")?"▼":"▶");
+    });
+}
+
+// ========== 分组管理 ==========
+var _groupModal=null;
+$(document).ready(function(){
+    _groupModal=new bootstrap.Modal(document.getElementById("groupModal"));
+});
+
+$("#groupManageBtn").click(function(){
+    var html='';
+    _groups.forEach(function(g,i){
+        html+='<div class="mb-2 p-2 border rounded group-edit-row">'
+            +'<div class="d-flex justify-content-between align-items-center mb-1">'
+            +'<input type="text" class="form-control form-control-sm group-name-input" value="'+g.name+'" style="width:60%;display:inline-block">'
+            +'<button class="btn btn-sm btn-outline-danger ms-1 del-group" data-idx="'+i+'">✕</button></div>'
+            +'<div class="small text-muted">包含 '+((g.tables||[]).length)+' 张表</div></div>';
+    });
+    html+='<button class="btn btn-sm btn-outline-primary w-100" id="addGroupBtn">➕ 添加分组</button>';
+    html+='<hr><h6>分配表到分组</h6>';
+    var assigned={};
+    _groups.forEach(function(g){(g.tables||[]).forEach(function(t){assigned[t]=g.name;});});
+    _allTables.forEach(function(t){
+        var sel='<select class="form-select form-select-sm group-assign" data-table="'+t.name+'">';
+        sel+='<option value="">未分组</option>';
+        _groups.forEach(function(g){sel+='<option value="'+g.name+'" '+(assigned[t.name]===g.name?'selected':'')+'>'+g.name+'</option>';});
+        sel+='</select>';
+        html+='<div class="d-flex justify-content-between align-items-center mb-1"><span class="small">📄 '+t.name+'</span>'+sel+'</div>';
+    });
+    $("#groupBody").html(html);
+    _groupModal.show();
+});
+
+$(document).on("click","#addGroupBtn",function(){
+    var name='新分组_'+(Math.random()+1).toString(36).substring(2,5);
+    _groups.push({name:name,tables:[]});
+    $("#groupManageBtn").click(); // re-render
+});
+
+$(document).on("click",".del-group",function(){
+    var idx=parseInt($(this).data("idx"));
+    _groups.splice(idx,1);
+    $("#groupManageBtn").click(); // re-render
+});
+
+$("#groupSaveBtn").click(function(){
+    // 读取分组名
+    $(".group-edit-row").each(function(i){
+        var inp=$(this).find(".group-name-input");
+        if(inp.length)_groups[i].name=inp.val().trim()||_groups[i].name;
+    });
+    // 读取表分配
+    _groups.forEach(function(g){g.tables=[];});
+    $(".group-assign").each(function(){
+        var t=$(this).data("table"),g=$(this).val();
+        if(g){var gr=_groups.find(function(x){return x.name===g;});if(gr)gr.tables.push(t);}
+    });
+    // 保存到后端
+    $.ajax({url:"/api/table-groups",type:"POST",contentType:"application/json",
+        data:JSON.stringify({groups:_groups}),success:function(r){
+            if(r.code===0){_groupModal.hide();lt();}
+            else alert(r.msg);
+        }
+    });
+});
+function loadTable(n){ct=n;cp=1;$("#emptyState").hide();$("#tableView").show();$.getJSON("/api/table/"+n+"?page=1",function(r){if(!r.code)fp(n,1);});}
+function fp(n,p){
+    var s=$("#searchInput").val()||"";
+    var fJson=applyFilters();
+    var params={page:p,search:s};
+    if(fJson)params.filters=fJson;
+    $.getJSON("/api/table/"+n,params,function(r){
+        if(!r.code){
+            render(r.data);
+            // 加载关键字段
+            $.getJSON("/api/table/"+n+"/key-field",function(kr){
+                if(kr.code===0){
+                    _currentKf=kr.data.key_field||"";
+                    $("#keyFieldDisplay").text(_currentKf||"—");
+                    if(_currentKf) markKeyFieldHeader();
+                }
+            });
+            // 加载隐藏列
+            $.getJSON("/api/table/"+n+"/hidden-cols",function(hcr){
+                if(hcr.code===0){_hiddenCols=hcr.data||[];applyHiddenCols();}
+            });
+            // 加载隐藏行数
+            $.getJSON("/api/table/"+n+"/hidden-count",function(hcr2){
+                if(hcr2.code===0&&hcr2.data.count>0){
+                    var $el=$("#totalRecords");
+                    if(!$el.find(".hidden-badge").length)
+                        $el.append('<span class="hidden-badge ms-2 badge bg-warning text-dark">已隐藏 '+hcr2.data.count+' 行 <a href="#" class="text-dark fw-bold show-hidden-link">显示</a></span>');
+                    else
+                        $el.find(".hidden-badge").html('已隐藏 '+hcr2.data.count+' 行 <a href="#" class="text-dark fw-bold show-hidden-link">显示</a>');
+                    // 显示隐藏行
+                    $el.off("click",".show-hidden-link").on("click",".show-hidden-link",function(e){
+                        e.preventDefault();
+                        $.getJSON("/api/table/"+n+"/hidden-rows",function(hrows){
+                            if(hrows.code!==0||!hrows.data.length)return;
+                            var mh='<div class="table-responsive" style="max-height:400px"><table class="table table-sm table-bordered"><thead><tr><th>ID</th><th style="width:60px">操作</th></tr></thead><tbody>';
+                            hrows.data.forEach(function(row){
+                                var rid=row.id;
+                                mh+='<tr><td>#'+rid+'</td><td><button class="btn btn-sm btn-outline-success unhide-row-btn" data-id="'+rid+'">↩ 恢复</button></td></tr>';
+                            });
+                            mh+='</tbody></table></div><div class="mt-2"><button class="btn btn-sm btn-success" id="unhideAllRowsBtn">↩ 恢复全部</button></div>';
+                            var $modal=$('<div class="modal fade"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">已隐藏的行</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">'+mh+'</div></div></div></div>');
+                            $("body").append($modal);
+                            var m=new bootstrap.Modal($modal[0]);
+                            m.show();
+                            $modal.on("hidden.bs.modal",function(){$(this).remove();});
+                            $modal.on("click",".unhide-row-btn",function(){
+                                var bid=$(this).data("id");
+                                $.ajax({url:"/api/table/"+n+"/rows/unhide",type:"POST",contentType:"application/json",
+                                    data:JSON.stringify({ids:[bid]}),
+                                    success:function(ur){if(ur.code===0){$modal.modal("hide");fp(n,p);}}
+                                });
+                            });
+                            $modal.on("click","#unhideAllRowsBtn",function(){
+                                $.ajax({url:"/api/table/"+n+"/rows/unhide",type:"POST",contentType:"application/json",
+                                    data:JSON.stringify({ids:[]}),
+                                    success:function(ur){if(ur.code===0){$modal.modal("hide");fp(n,p);}}
+                                });
+                            });
+                        });
+                    });
+                }else{
+                    $("#totalRecords .hidden-badge").remove();
+                }
+            });
+        }
+    });
+}
+
+var _hiddenCols=[];
+var _filters={}; // 列筛选条件 {field: [value1, value2, ...]}
+function toggleFilter(){}
+function applyFilters(){
+    var active={};
+    for(var fld in _filters){
+        if(_filters[fld]&&_filters[fld].length)active[fld]=_filters[fld];
+    }
+    var cnt=Object.keys(active).length;
+    var filtersJson=cnt?JSON.stringify(active):'';
+    // 更新筛选图标状态
+    $('.filter-icon').each(function(){
+        var fld=$(this).data('field');
+        if(active[fld])$(this).html('🔽').addClass('filter-active');
+        else $(this).html('▾').removeClass('filter-active');
+    });
+    // 显示/隐藏清除筛选按钮
+    if(cnt)$("#clearAllFiltersBtn").show().text('🧹 筛选('+cnt+')');
+    else $("#clearAllFiltersBtn").hide();
+    return filtersJson;
+}
+function applyHiddenCols(){
+    if(!_hiddenCols.length)return;
+    $("#tableHead th.col-head").each(function(){
+        var fld=$(this).data("field");
+        if(_hiddenCols.indexOf(fld)>=0)$(this).hide();
+    });
+    // 显示隐藏列提示
+    var $el=$("#tableHead");
+    if(!$el.find(".hidden-col-indicator").length)
+        $el.append('<tr class="hidden-col-indicator"><td colspan="99"><span class="badge bg-warning text-dark small">已隐藏 '+_hiddenCols.length+' 列 <a href="#" class="text-dark fw-bold show-hidden-cols-link">显示</a></span></td></tr>');
+    $el.off("click",".show-hidden-cols-link").on("click",".show-hidden-cols-link",function(e){
+        e.preventDefault();
+        _hiddenCols=[];
+        $("#tableHead th.col-head").show();
+        $(".hidden-col-indicator").remove();
+        $.ajax({url:"/api/table/"+ct+"/column/unhide",type:"POST",contentType:"application/json",
+            data:JSON.stringify({columns:[]}),success:function(){}});
+    });
+}
+
+function markKeyFieldHeader(){
+    $("#tableHead th.col-head").each(function(){
+        var fld=$(this).data("field");
+        var txt=$(this).text().replace(/\s*\*?$/,"");
+        if(fld===_currentKf) txt+=" *";
+        $(this).text(txt);
+    });
+    applyHiddenCols(); // 隐藏了列标记后重新应用隐藏
+}
+
+var ctPk="id";
+function render(d){
+    ctPk=d.pk||"id";
+    $("#tableName").text(d.name);$("#totalRecords").text(d.total+" 条");
+    ftypes={};d.schema.forEach(function(c){ftypes[c.field]=c.type.toLowerCase();});
+    var h=$("#tableHead").empty(),tr=$("<tr><th>序号</th></tr>");
+    d.schema.forEach(function(c){if(c.field===d.pk)return;var fld=c.field;var fIcon=_filters[fld]&&_filters[fld].length?'<span class="filter-icon filter-active" data-field="'+fld+'" style="cursor:pointer;margin-left:4px">🔽</span>':'<span class="filter-icon" data-field="'+fld+'" style="cursor:pointer;margin-left:4px">▾</span>';tr.append("<th class='col-head' data-field='"+fld+"' data-type='"+c.type+"'>"+fld+fIcon+"</th>");});h.append(tr);
+    var b=$("#tableBody").empty(),f=d.schema.map(function(c){return c.field}),pk=d.pk||"id";
+    if(!d.rows.length){b.append('<tr><td colspan="99" class="text-center text-muted">暂无</td></tr>');return;}
+    d.rows.forEach(function(row,i){
+        var tr2=$("<tr data-id='"+row[pk]+"'>");tr2.append("<td class='text-muted'>"+((d.page-1)*PP+i+1)+"</td>");
+        f.forEach(function(field){
+            if(field===pk)return;
+            var v=row[field];
+            if(v===null||v===undefined)v='';
+            else if(typeof v==='object')v=JSON.stringify(v);
+            else if(typeof v==='number'&&isFloat(ftypes[field]||""))v=v.toFixed(2);
+            tr2.append("<td class='editable' data-field='"+field+"' data-val='"+String(row[field]??"").replace(/"/g,"&quot;")+"'>"+v+"</td>");
+        });b.append(tr2);
+    });
+    var tp=Math.max(1,Math.ceil(d.total/PP)),pg=d.page,ul=$("#pageUl").empty();
+    ul.append('<li class="page-item '+(pg<=1?'disabled':'')+'"><a class="page-link" data-p="'+(pg-1)+'">&laquo;</a></li>');if(pg>3)ul.append('<li class="page-item disabled"><span class="page-link">...</span></li>');
+    for(var i=Math.max(1,pg-2);i<=Math.min(tp,pg+2);i++)ul.append('<li class="page-item '+(i==pg?'active':'')+'"><a class="page-link" data-p="'+i+'">'+i+'</a></li>');if(pg<tp-2)ul.append('<li class="page-item disabled"><span class="page-link">...</span></li>');
+    ul.append('<li class="page-item '+(pg>=tp?'disabled':'')+'"><a class="page-link" data-p="'+(pg+1)+'">&raquo;</a></li>');
+    ul.find("a[data-p]").click(function(e){e.preventDefault();var p=parseInt($(this).data("p"));if(p>0&&p<=tp){cp=p;fp(ct,p);}});
+    // 黄金比例：行高 = 列宽 × 0.618
+    try{var tbl=document.getElementById("dataTable");if(tbl){var tw=tbl.offsetWidth;if(tw<10)tw=tbl.parentElement.offsetWidth-20;var nc=document.querySelectorAll("#tableHead th").length;if(nc>0&&tw>10){var cw=tw/nc,rh=Math.round(cw*0.618);rh=Math.max(20,Math.min(120,rh));var c=tbl.querySelectorAll("tbody td");for(var i=0;i<c.length;i++)c[i].style.height=rh+"px";}}}catch(ex){}
+}
+function isFloat(t){return t.indexOf("double")>=0||t.indexOf("float")>=0||t.indexOf("decimal")>=0||t.indexOf("numeric")>=0;}
+var st=null;
+$("#searchInput").on("input",function(){clearTimeout(st);st=setTimeout(function(){if(ct){cp=1;fp(ct,1);}},400);});
+// ── 筛选功能 ──────────────────────────────
+var _filterField=null;
+// 点击筛选图标
+$(document).on("click",".filter-icon",function(e){
+    e.stopPropagation();
+    var $icon=$(this),fld=$icon.data("field");
+    var $th=$icon.closest("th");
+    // 获取列标题
+    var txt=$th.clone().children().remove().end().text().trim();
+    $("#filterFieldName").text("筛选: "+txt);
+    _filterField=fld;
+    // 定位下拉框
+    var offset=$th.offset();
+    $("#filterDropdown").css({left:offset.left,top:offset.top+$th.outerHeight()+2,minWidth:Math.max(200,$th.outerWidth())}).show();
+    // 加载唯一值
+    loadFilterValues(fld);
+});
+// 关闭筛选下拉
+$("#filterDropdown .filter-dropdown-close").click(function(){$("#filterDropdown").hide();});
+$(document).click(function(e){
+    if(!$(e.target).closest("#filterDropdown,.filter-icon").length)$("#filterDropdown").hide();
+});
+// 加载列唯一值
+function loadFilterValues(fld){
+    $("#filterValueList").html('<div class="text-center py-2"><span class="spinner-border spinner-border-sm"></span></div>');
+    $.getJSON("/api/table/"+encodeURIComponent(ct)+"/column/"+encodeURIComponent(fld)+"/values",function(r){
+        if(r.code||!r.data){$("#filterValueList").html('<div class="text-muted text-center py-2">加载失败</div>');return;}
+        var vals=r.data,sel=_filters[fld]||[];
+        if(!vals.length){$("#filterValueList").html('<div class="text-muted text-center py-2">无数据</div>');return;}
+        var html='<div class="filter-values">';
+        vals.forEach(function(v){
+            var display=v==null||v===''?'(空白)':String(v).substring(0,100);
+            var checked=sel.length===0||sel.indexOf(String(v))>=0?'checked':'';
+            html+='<label class="filter-value-item"><input type="checkbox" class="filter-cb" data-val="'+String(v).replace(/"/g,'&quot;')+'" '+checked+'> '+display+'</label>';
+        });
+        html+='</div>';
+        $("#filterValueList").html(html);
+    });
+}
+// 全选/取消
+$("#filterSelectAll").click(function(){$("#filterValueList .filter-cb").prop("checked",true);});
+$("#filterDeselectAll").click(function(){$("#filterValueList .filter-cb").prop("checked",false);});
+// 确定 → 应用筛选
+$("#filterOkBtn").click(function(){
+    if(!_filterField){$("#filterDropdown").hide();return;}
+    var vals=[];
+    $("#filterValueList .filter-cb:checked").each(function(){vals.push($(this).data("val"));});
+    if(vals.length===0){
+        delete _filters[_filterField];
+    }else{
+        _filters[_filterField]=vals;
+    }
+    $("#filterDropdown").hide();
+    cp=1;fp(ct,1);
+});
+// 清除该列筛选
+$("#filterClearBtn").click(function(){
+    if(!_filterField){$("#filterDropdown").hide();return;}
+    delete _filters[_filterField];
+    $("#filterDropdown").hide();
+    cp=1;fp(ct,1);
+});
+// 筛选搜索（过滤值列表）
+$("#filterSearchInput").on("input",function(){
+    var q=$(this).val().toLowerCase();
+    $("#filterValueList .filter-value-item").each(function(){
+        var txt=$(this).text().trim().toLowerCase();
+        $(this).toggle(txt.indexOf(q)>=0);
+    });
+});
+// 清除所有筛选
+$("#clearAllFiltersBtn").click(function(){
+    _filters={};
+    cp=1;fp(ct,1);
+});
+
+$("#exportBtn").click(function(){if(!ct){alert("请先选择表");return;}window.location.href="/api/table/"+encodeURIComponent(ct)+"/export";});
+$("#refreshBtn").click(function(){if(ct)fp(ct,cp);});
+$("#beautifyBtn").click(function(){
+    $("#dataTable").toggleClass("table-gongwen");
+    var on=$("#dataTable").hasClass("table-gongwen");
+    $(this).toggleClass("btn-outline-secondary btn-secondary").html(on?"📐 美化(开)":"📐 美化");
+    if(on){
+        // 自动调整列宽：遍历表头，按内容长度设宽度
+        $("#dataTable thead th").each(function(){
+            var mx=0;
+            var colIdx=$(this).index();
+            $("#dataTable tbody tr").each(function(){
+                var cell=$(this).children().eq(colIdx);
+                var txt=cell.text()||"";
+                var cw=0;
+                for(var i=0;i<txt.length;i++){var code=txt.charCodeAt(i);cw+= code>0x4e00?18:(code>0x80?12:7);}
+                if(cw>mx)mx=cw;
+            });
+            var hw=0,hdr=$(this).text();
+            for(var i=0;i<hdr.length;i++){var code=hdr.charCodeAt(i);hw+= code>0x4e00?18:(code>0x80?12:7);}
+            if(hw>mx)mx=hw;
+            $(this).css("width",(mx+20)+"px");
+        });
+    }else{
+        $("#dataTable thead th").css("width","");
+    }
+});
+// ── 多表汇总 ──────────────────────────────────
+var _aggregateModal=null;
+$(document).ready(function(){_aggregateModal=new bootstrap.Modal(document.getElementById("aggregateModal"));});
+$("#aggregateBtn").click(function(){
+    if(!_allTables||_allTables.length<2){alert("请先创建至少 2 张表");return;}
+    var html='';
+    _allTables.forEach(function(t){
+        html+='<div class="form-check"><input class="form-check-input aggregate-tbl-cb" type="checkbox" value="'+t.name+'" id="ag_'+t.name.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g,'_')+'"><label class="form-check-label" for="ag_'+t.name.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g,'_')+'">📄 '+t.name+'</label></div>';
+    });
+    $("#aggregateTableList").html(html);
+    $("#aggregateKeyField").empty().append('<option value="">— 请先选择表 —</option>');
+    $("#aggregateNewName").val("");
+    $("#aggregatePreview").hide();
+    $("#aggregateResult").empty();
+    $("#confirmAggregate").prop("disabled",true);
+    _aggregateModal.show();
+});
+// 当勾选表发生变化 → 加载关键字段选项
+$(document).on("change",".aggregate-tbl-cb",function(){
+    var sel=[],has={};
+    $(".aggregate-tbl-cb:checked").each(function(){sel.push($(this).val());has[$(this).val()]=true;});
+    if(sel.length<2){
+        $("#aggregateKeyField").empty().append('<option value="">请勾选至少 2 张表</option>');
+        $("#confirmAggregate").prop("disabled",true);
+        return;
+    }
+    // 找所有表的共同字段作为关键字段候选
+    var commonFields=null;
+    sel.forEach(function(tn){
+        $.ajax({url:"/api/table/"+encodeURIComponent(tn),type:"GET",async:false,success:function(r){
+            if(r.code===0){
+                var fds=r.data.schema.map(function(c){return c.field;}).filter(function(f){return f!="id"&&f!="_deleted";});
+                if(commonFields===null) commonFields=fds;
+                else commonFields=commonFields.filter(function(f){return fds.indexOf(f)>=0;});
+            }
+        }});
+    });
+    var kfHtml='<option value="">— 选择关键字段 —</option>';
+    (commonFields||[]).forEach(function(f){
+        kfHtml+='<option value="'+f+'">'+f+'</option>';
+    });
+    $("#aggregateKeyField").html(kfHtml);
+    $("#confirmAggregate").prop("disabled",true);
+    $("#aggregatePreview").hide();
+});
+// 选择关键字段 → 自动触发预览
+$("#aggregateKeyField").change(function(){
+    var kf=$(this).val();
+    if(!kf){$("#confirmAggregate").prop("disabled",true);return;}
+    var sel=[];
+    $(".aggregate-tbl-cb:checked").each(function(){sel.push($(this).val());});
+    if(sel.length<2){alert("请勾选至少 2 张表");return;}
+    $("#aggregateResult").html('<span class="text-info">⏳ 正在生成预览...</span>');
+    $.ajax({url:"/api/aggregate/preview",type:"POST",contentType:"application/json",
+        data:JSON.stringify({tables:sel,key_field:kf}),
+        success:function(r){
+            if(r.code===0){
+                var d=r.data;
+                // 字段名冲突 → 依次弹窗让用户自定义
+                if(d.field_conflicts&&d.field_conflicts.length){
+                    for(var i=0;i<d.field_conflicts.length;i++){
+                        var c=d.field_conflicts[i];
+                        var msg='字段名不一致：\n"'+c.tables[0]+'.'+c.fields[0]+'" ↔ "'+c.tables[1]+'.'+c.fields[1]+'"\n\n请输入统一字段名：';
+                        var newName=prompt(msg,c.default_name);
+                        if(newName&&newName.trim()){
+                            // 替换合并后列名
+                            for(var j=0;j<d.headers.length;j++){
+                                if(d.headers[j]===c.default_name){
+                                    d.headers[j]=newName.trim(); break;
+                                }
+                            }
+                            c.default_name=newName.trim(); // 后续冲突引用更新
+                        }
+                    }
+                    // 保存用户自定义的表头，创建时使用
+                    _aggHeaders=d.headers.slice();
+                }
+                renderAggregatePreview(d);
+                $("#confirmAggregate").prop("disabled",false);
+            }else{
+                $("#aggregateResult").html('<span class="text-danger">❌ '+r.msg+'</span>');
+                $("#confirmAggregate").prop("disabled",true);
+            }
+        },
+        error:function(){alert("预览失败");}
+    });
+});
+function renderAggregatePreview(d){
+    var $table=$("#aggregatePreviewTable");
+    var $thead=$table.find("thead").empty();
+    var $tbody=$table.find("tbody").empty();
+    var tr=$("<tr></tr>");
+    d.headers.forEach(function(h){tr.append("<th>"+h+"</th>");});
+    $thead.append(tr);
+    d.rows.forEach(function(row){
+        var tr2=$("<tr></tr>");
+        row.forEach(function(v){tr2.append("<td>"+(v===null?'<span class="text-muted">(空)</span>':v)+"</td>");});
+        $tbody.append(tr2);
+    });
+    $("#aggregateTotal").text("共 "+d.total+" 条记录（预览前 "+Math.min(d.rows.length,d.total)+" 行）");
+    $("#aggregatePreview").show();
+    $("#aggregateResult").empty();
+    // 显示字段映射合并提示
+    if(d.warnings&&d.warnings.length){
+        var warnHtml='<div class="alert alert-warning py-1 mb-2 small">';
+        d.warnings.forEach(function(w){warnHtml+='⚠️ '+w+'<br>';});
+        warnHtml+='</div>';
+        $("#aggregateResult").html(warnHtml);
+    }
+    // 显示每张表独有的字段（不会被自动合并）
+    if(d.orphan_fields&&Object.keys(d.orphan_fields).length){
+        var orp='<div class="alert alert-info py-1 mb-2 small">';
+        orp+='💡 以下字段在各表中名称不同，将分列显示：<br>';
+        for(var tn in d.orphan_fields){
+            orp+='  📄 '+tn+'：'+d.orphan_fields[tn].join('、')+'<br>';
+        }
+        orp+='<span class="text-muted">如需合并为同一列，请先到 🔗 映射 建立字段映射，再重新汇总</span></div>';
+        $("#aggregateResult").append(orp);
+    }
+    // 自动填入新表名
+    if(!$("#aggregateNewName").val()){
+        var names=[];$(".aggregate-tbl-cb:checked").each(function(){names.push($(this).val());});
+        $("#aggregateNewName").val(names.join("_")+"_汇总");
+    }
+}
+// 确认创建汇总表
+var _aggHeaders=[]; // 存储用户修改过的表头（字段名冲突时自定义）
+$("#confirmAggregate").click(function(){
+    var btn=$(this);btn.prop("disabled",true);
+    var kf=$("#aggregateKeyField").val();
+    var nn=$("#aggregateNewName").val().trim();
+    if(!nn){alert("请填写新表名");btn.prop("disabled",false);return;}
+    var sel=[];$(".aggregate-tbl-cb:checked").each(function(){sel.push($(this).val());});
+    // 调用后端重新获取全部数据（预览只返回100行）
+    $.ajax({url:"/api/aggregate/preview",type:"POST",contentType:"application/json",
+        data:JSON.stringify({tables:sel,key_field:kf}),
+        success:function(r){
+            if(r.code!==0){alert(r.msg);btn.prop("disabled",false);return;}
+            // 表头优先使用用户自定义的（字段冲突弹窗中改过的），否则用 API 返回的
+            var headers=_aggHeaders.length?_aggHeaders:r.data.headers;
+            var allRows=r.data.rows;
+            $.ajax({url:"/api/aggregate/create",type:"POST",contentType:"application/json",
+                data:JSON.stringify({new_name:nn,headers:headers,rows:allRows,tables:sel,key_field:kf}),
+                success:function(r2){
+                    if(r2.code===0){
+                        $("#aggregateResult").html('<span class="text-success">✅ '+r2.msg+'</span>');
+                        lt();
+                        setTimeout(function(){_aggregateModal.hide();},2000);
+                    }else{
+                        $("#aggregateResult").html('<span class="text-danger">❌ '+r2.msg+'</span>');
+                        btn.prop("disabled",false);
+                    }
+                },
+                error:function(){alert("创建失败");btn.prop("disabled",false);}
+            });
+        },
+        error:function(){alert("获取数据失败");btn.prop("disabled",false);}
+    });
+});
+
+// ── 回收站 ────────────────────────────────────────
+var _recycleBinModal=null;
+$(document).ready(function(){_recycleBinModal=new bootstrap.Modal(document.getElementById("recycleBinModal"));});
+function loadRecycleBin(){
+    $.getJSON("/api/backup/list",function(r){
+        if(r.code!==0){$("#recycleBinList").html('<div class="alert alert-danger">❌ '+r.msg+'</div>');return;}
+        if(!r.data||r.data.length===0){
+            $("#recycleBinList").html('<div class="text-center text-muted py-4">暂无备份</div>');return;
+        }
+        var h='<div class="mb-2 d-flex gap-2"><button class="btn btn-sm btn-success" id="batchRestoreBtn">↩ 批量恢复</button><button class="btn btn-sm btn-danger" id="batchDeleteBtn">🗑 批量删除</button><span class="text-muted small align-self-center ms-2">勾选后点击操作按钮</span></div>';
+        h+='<div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr><th style="width:40px"><input type="checkbox" id="rbSelectAll"></th><th>表名</th><th>备份时间</th><th>记录数</th><th>大小</th></tr></thead><tbody>';
+        r.data.forEach(function(b){
+            h+='<tr><td><input type="checkbox" class="rb-cb" value="'+b.filename+'" data-table="'+b.table+'"></td>'+
+                '<td>'+b.table+'</td><td>'+b.backup_at+'</td><td>'+b.rows+' 条</td><td>'+(b.size/1024).toFixed(1)+' KB</td></tr>';
+        });
+        h+='</tbody></table></div>';
+        $("#recycleBinList").html(h);
+        // 全选
+        $("#rbSelectAll").off("change").on("change",function(){
+            $(".rb-cb").prop("checked",$(this).prop("checked"));
+        });
+        // 批量恢复
+        $("#batchRestoreBtn").off("click").on("click",function(){
+            var fns=[];$(".rb-cb:checked").each(function(){fns.push($(this).val());});
+            if(!fns.length){alert("请先勾选要恢复的备份");return;}
+            if(!confirm("确认恢复 "+fns.length+" 个备份？现有同名表会被替换。"))return;
+            var btn=$(this);btn.prop("disabled",true).text("恢复中...");
+            var done=0,fail=0;
+            fns.forEach(function(fn,i){
+                $.ajax({url:"/api/backup/restore",type:"POST",contentType:"application/json",
+                    data:JSON.stringify({filename:fn}),
+                    success:function(r){r.code===0?done++:fail++;},
+                    error:function(){fail++;},
+                    complete:function(){if(done+fail===fns.length){alert("✅ 恢复 "+done+" 个成功，"+(fail?"❌ "+fail+" 个失败":"无失败"));loadRecycleBin();lt();btn.prop("disabled",false).text("↩ 批量恢复");}}
+                });
+            });
+        });
+        // 批量删除
+        $("#batchDeleteBtn").off("click").on("click",function(){
+            var fns=[];$(".rb-cb:checked").each(function(){fns.push($(this).val());});
+            if(!fns.length){alert("请先勾选要删除的备份");return;}
+            if(!confirm("确认永久删除 "+fns.length+" 个备份文件？不可恢复！"))return;
+            $.ajax({url:"/api/backup/delete",type:"POST",contentType:"application/json",
+                data:JSON.stringify({filenames:fns}),
+                success:function(r){alert(r.msg);loadRecycleBin();},
+                error:function(){alert("删除失败");}
+            });
+        });
+    });
+}
+$("#recycleBinBtn").click(function(){_recycleBinModal.show();loadRecycleBin();});
+
+// ── 分类汇总 ──────────────────────────────────────
+var _groupSummaryModal=null;
+$(document).ready(function(){_groupSummaryModal=new bootstrap.Modal(document.getElementById("groupSummaryModal"));});
+$("#groupSummaryBtn").click(function(){
+    if(!ct){alert("请先选择表");return;}
+    $.getJSON("/api/table/"+encodeURIComponent(ct),function(r){
+        if(r.code!==0||!r.data||!r.data.schema){alert("获取字段失败");return;}
+        var fields=r.data.schema.filter(function(c){return c.field!=="id"&&c.field!=="_deleted";});
+        var opts='<option value="">— 选择 —</option>';
+        var opts2='<option value="">选择字段</option>';
+        fields.forEach(function(c){
+            opts+='<option value="'+c.field+'">'+c.field+' ('+c.type+')</option>';
+            opts2+='<option value="'+c.field+'">'+c.field+' ('+c.type+')</option>';
+        });
+        $("#gsGroupField").html(opts);
+        $("#gsAggField").html(opts2);
+        $("#gsAggList").html('<div class="text-muted small" id="gsNoAgg">暂无汇总项，点击下方添加</div>');
+        $("#gsTableName").val(ct+"_分类汇总");
+        $("#gsResult").empty();
+        $("#gsConfirmBtn").prop("disabled",true);
+        _gsAggs=[];
+        _groupSummaryModal.show();
+    });
+});
+var _gsAggs=[];
+$("#gsAddAgg").click(function(){
+    var f=$("#gsAggField").val(),t=$("#gsAggType").val(),a=$("#gsAggAlias").val().trim();
+    if(!f){alert("请选择字段");return;}
+    var alias=a||f+"_"+t;
+    // 检查重复
+    for(var i=0;i<_gsAggs.length;i++){if(_gsAggs[i].field===f&&_gsAggs[i].type===t){alert("已添加相同的汇总项");return;}}
+    _gsAggs.push({field:f,type:t,alias:alias});
+    renderGsAggs();
+    $("#gsAggField").val("");$("#gsAggAlias").val("");
+    $("#gsConfirmBtn").prop("disabled",!$("#gsGroupField").val());
+});
+function renderGsAggs(){
+    var h='';var seen={};
+    _gsAggs.forEach(function(a,i){
+        var typeLabel=a.type==="count"?"计数":"求和";
+        var alias=a.alias;
+        // 去重别名
+        if(seen[alias]){alias=a.field+"_"+a.type+"_"+i;}
+        seen[alias]=true;
+        h+='<div class="row g-2 mb-1 align-items-center gs-agg-item" data-idx="'+i+'">'+
+            '<div class="col-md-5"><span class="badge bg-secondary">'+a.field+'</span></div>'+
+            '<div class="col-md-2"><span class="badge bg-info">'+typeLabel+'</span></div>'+
+            '<div class="col-md-3"><input type="text" class="form-control form-control-sm gs-agg-alias" value="'+alias+'"></div>'+
+            '<div class="col-md-2"><button class="btn btn-sm btn-outline-danger remove-gs-agg">✕</button></div></div>';
+    });
+    if(_gsAggs.length===0){h='<div class="text-muted small" id="gsNoAgg">暂无汇总项，点击下方添加</div>';}
+    $("#gsAggList").html(h);
+    // 别名变更自动更新
+    $(".gs-agg-alias").off("change").on("change",function(){
+        var idx=$(this).closest(".gs-agg-item").data("idx");
+        _gsAggs[idx].alias=$(this).val().trim()||_gsAggs[idx].field+"_"+_gsAggs[idx].type;
+    });
+    $(".remove-gs-agg").off("click").on("click",function(){
+        var idx=$(this).closest(".gs-agg-item").data("idx");
+        _gsAggs.splice(idx,1);
+        renderGsAggs();
+        if(_gsAggs.length===0)$("#gsConfirmBtn").prop("disabled",true);
+    });
+}
+$("#gsGroupField").change(function(){
+    $("#gsConfirmBtn").prop("disabled",!$(this).val()||_gsAggs.length===0);
+});
+$("#gsConfirmBtn").click(function(){
+    var gf=$("#gsGroupField").val(),tn=$("#gsTableName").val().trim();
+    if(!gf||_gsAggs.length===0){alert("请选择分组字段并添加汇总项");return;}
+    // 同步别名
+    $(".gs-agg-alias").each(function(){
+        var idx=$(this).closest(".gs-agg-item").data("idx");
+        _gsAggs[idx].alias=$(this).val().trim()||_gsAggs[idx].field+"_"+_gsAggs[idx].type;
+    });
+    var aggs=_gsAggs.map(function(a){return{field:a.field,type:a.type,alias:a.alias};});
+    var btn=$(this);btn.prop("disabled",true);
+    $("#gsResult").html('<span class="text-info">⏳ 正在生成...</span>');
+    $.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/group-summary",type:"POST",contentType:"application/json",
+        data:JSON.stringify({group_field:gf,aggregations:aggs,title:tn}),
+        success:function(r){
+            if(r.code===0){
+                $("#gsResult").html('<span class="text-success">✅ '+r.msg+'</span>');
+                lt();
+                setTimeout(function(){_groupSummaryModal.hide();fp(r.table_name,1);},1500);
+            }else{
+                $("#gsResult").html('<span class="text-danger">❌ '+r.msg+'</span>');
+                btn.prop("disabled",false);
+            }
+        },
+        error:function(){alert("请求失败");btn.prop("disabled",false);}
+    });
+});
+
+$("#backfillBtn").click(function(){
+    if(!ct){alert("请先选择表");return;}
+    if(!confirm("按已建立的字段映射，将关联表数据补填到当前表？"))return;
+    var btn=$(this);btn.prop("disabled",true).text("补填中...");
+    $.ajax({url:"/api/sync/backfill",type:"POST",contentType:"application/json",
+        data:JSON.stringify({table:ct}),
+        success:function(r){if(r.code===0){alert(r.msg);fp(ct,cp);}else alert(r.msg);},
+        complete:function(){btn.prop("disabled",false).text("📥 补填");}
+    });
+});
+// 右键菜单（行）
+function posMenu($m,e){
+    var x=e.pageX,y=e.pageY,mw=$m.outerWidth(),mh=$m.outerHeight(),ww=$(window).width(),wh=$(window).height();
+    if(x+mw>ww-10)x=ww-mw-10; if(y+mh>wh-10)y=wh-mh-10; if(x<10)x=10; if(y<10)y=10;
+    $m.css({left:x,top:y}).show();
+}
+$(document).on("contextmenu","#tableBody",function(e){e.preventDefault();var rid=$(e.target).closest("tr").data("id"),$m=$("#rowMenu");$m.data("rid",rid||0);posMenu($m,e);$("#colMenu").hide();});
+$(document).on("click",function(){$("#rowMenu,#colMenu").hide();});
+$("#rowMenu").on("click",".context-menu-item",function(e){
+    e.stopPropagation();var action=$(this).attr("data-action"),rid=$("#rowMenu").data("rid");$("#rowMenu").hide();
+    if(action==="insert"){if(!ct){alert("当前表名为空");return;}console.log("insert into:",ct);$.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/row",type:"POST",success:function(r){console.log("insert ok:",r);if(r.code===0){fp(ct,1);$.getJSON("/api/tables",function(rt){if(rt.code===0)$("#tableCount").text(rt.data.length+" 张表");});}else alert(r.msg);},error:function(xhr){alert("插入失败 状态:"+xhr.status);}});}
+    if(action==="view-record"&&rid){$.getJSON("/api/table/"+encodeURIComponent(ct)+"/record/"+rid,function(r){if(r.code===0){var g=r.data.groups,ch={},h='';g.forEach(function(grp){h+='<div class="mb-2"><strong class="text-primary small">📋 '+grp.table+'</strong><table class="table table-sm table-bordered mb-0 mt-1" data-table="'+grp.table+'" data-id="'+grp.id+'"><thead><tr><th style="width:30%">字段名</th><th>字段值</th></tr></thead><tbody>';for(var f in grp.fields){var v=grp.fields[f];h+='<tr><td class="text-muted small">'+f+'</td><td class="rec-val" data-table="'+grp.table+'" data-id="'+grp.id+'" data-field="'+f+'">'+(v||'')+'</td></tr>';}h+='</tbody></table></div>';});h+='<div class="d-flex gap-2"><button class="btn btn-primary btn-sm" id="applyRecordBtn">✅ 应用</button><span id="recordStatus" class="small align-self-center"></span></div>';$("#recordContent").html(h);_recordChanges={};$("#applyRecordBtn").click(function(){var ups=[];for(var k in _recordChanges){var u=_recordChanges[k];ups.push({table:u.table,id:u.id,field:u.field,value:u.val});}if(!ups.length){$("#recordStatus").text("无修改");return;}$("#applyRecordBtn").prop("disabled",true);$("#recordStatus").text("提交中...");$.ajax({url:"/api/table/batch-update",type:"POST",contentType:"application/json",data:JSON.stringify({updates:ups}),success:function(r2){$("#recordStatus").text(r2.msg);if(r2.code===0){_recordChanges={};$(".rec-changed").removeClass("rec-changed");if(ct)fp(ct,cp);}setTimeout(function(){$("#recordStatus").text("");},3000);},complete:function(){$("#applyRecordBtn").prop("disabled",false);}});});(new bootstrap.Modal(document.getElementById("recordModal"))).show();}});}
+$(document).on("dblclick",".rec-val",function(){var td=$(this);if(td.find("input").length)return;var v=td.text(),tbl=td.data("table"),rid=td.data("id"),fld=td.data("field");td.html('<input type="text" class="form-control form-control-sm" value="'+v.replace(/"/g,"&quot;")+'">');var inp=td.find("input");inp.focus();inp.select();inp.on("blur",function(){var nv=inp.val();if(nv!==v){_recordChanges[tbl+"_"+rid+"_"+fld]={table:tbl,id:rid,field:fld,val:nv};td.addClass("rec-changed");}td.html(nv);});inp.on("keydown",function(e){if(e.key==="Enter")inp.blur();if(e.key==="Escape")td.html(v);});});
+$(document).on("click",".rec-val",function(){$("#rowMenu,#colMenu").hide();});
+    if(action==="hide-row"&&rid)$.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/row/"+rid+"/hide",type:"POST",success:function(r){if(r.code===0){fp(ct,1);}else alert(r.msg);},error:function(){alert("隐藏失败");}});
+    if(action==="hide-selected-rows"){
+        var ids=[];_sel.cells.forEach(function(td){
+            var rid=td.closest("tr").data("id");
+            if(rid&&ids.indexOf(rid)<0)ids.push(rid);
+        });
+        if(ids.length===0){alert("请先选中要隐藏的行（Shift+点击选择范围）");return;}
+        if(!confirm("确认隐藏 "+ids.length+" 行？"))return;
+        $.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/rows/hide",type:"POST",contentType:"application/json",
+            data:JSON.stringify({ids:ids}),
+            success:function(r){if(r.code===0){fp(ct,cp);selClear();}else alert(r.msg);}
+        });
+    }
+    if(action==="copy-rows"&&rid){
+        var $row=$("#tableBody tr[data-id='"+rid+"']"),fields=[],vals=[];
+        $row.find("td.editable").each(function(){
+            fields.push($(this).data("field"));vals.push($(this).text().trim());
+        });
+        $.ajax({url:"/api/clipboard/copy",type:"POST",contentType:"application/json",
+            data:JSON.stringify({table:ct,key_field:ctPk,fields:fields,rows:[vals]}),
+            success:function(r){if(r.code===0)alert(r.msg);else alert(r.msg);}
+        });
+    }
+    if(action==="delete-row"&&rid&&confirm("确认从数据库永久删除第 "+rid+" 行？\n不可恢复！"))$.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/row/"+rid,type:"DELETE",success:function(r){if(r.code===0)fp(ct,cp);else alert(r.msg);}});
+});
+// ── 列头选中（点击/拖拽/Shift）+ 联动表体 ──
+var _colSel={first:null,cols:[]},_colDragging=false,_colMoved=false;
+function mirrorColSelection(){
+    $("#tableBody td").removeClass("selected-cell col-selected");
+    if(!_colSel.cols.length)return;
+    var fields=_colSel.cols;
+    $("#tableBody td.editable").each(function(){
+        if(fields.indexOf($(this).data("field"))>=0){
+            $(this).addClass("selected-cell");
+        }
+    });
+}
+function selClearCols(){
+    $("#tableHead th.col-head").removeClass("selected-header");
+    $("#tableBody td").removeClass("selected-cell col-selected");
+    _colSel={first:null,cols:[]};
+}
+// 列头 mousedown → 记录选中的第一个列头
+function colHeadMouseDown(e){
+    if($(e.target).closest(".filter-icon").length)return; // 排除筛选图标
+    if(e.shiftKey||e.ctrlKey||e.metaKey)return;
+    e.preventDefault();
+    _colDragging=false;_colMoved=false;
+    var fld=$(this).data("field");
+    _colSel={first:this,cols:[fld]};
+    selClearCols();
+    $(this).addClass("selected-header");
+    mirrorColSelection();
+}
+// 全局 mousemove → elementFromPoint 检测列头拖拽
+function colHeadGlobalMove(e){
+    if(!_colSel.first||_colSel.cols.length===0)return;
+    var el=$(document.elementFromPoint(e.clientX,e.clientY));
+    var $th=el.closest("th.col-head");
+    if(!$th.length)return;
+    // 必须是从之前 mousedown 的同父级 #tableHead 内出发的拖拽
+    if(!$th.closest("#tableHead").length)return;
+    var startFirst=_colSel.first;
+    // 确认 start 还在同个 tableHead 内
+    if(!$(startFirst).closest("#tableHead").length)return;
+    _colMoved=true;_colDragging=true;
+    var $ths=$("#tableHead th.col-head");
+    var idx1=$ths.index(startFirst),idx2=$ths.index($th);
+    if(idx1<0||idx2<0)return;
+    selClearCols();
+    _colSel={first:startFirst,cols:[]};
+    for(var i=Math.min(idx1,idx2);i<=Math.max(idx1,idx2);i++){
+        $ths.eq(i).addClass("selected-header");
+        _colSel.cols.push($ths.eq(i).data("field"));
+    }
+    mirrorColSelection();
+}
+// 全局 mouseup → 判定是拖拽还是单击
+function colHeadGlobalUp(e){
+    if(!_colSel.first)return;
+    if(_colMoved){
+        // 拖拽完成，阻止 click 事件干扰
+        _colDragging=false;
+        return;
+    }
+    // 单击：不处理，交由下面的 click 处理
+    // 但如果点击了筛选图标，清除临时状态
+    if($(e.target).closest(".filter-icon").length){
+        selClearCols();
+    }
+}
+// 列头 click → Shift 范围 / Ctrl 切换 / 普通单选
+$(document).on("click","#tableHead th.col-head",function(e){
+    if($(e.target).closest(".filter-icon").length)return;
+    if(_colMoved){_colMoved=false;e.stopImmediatePropagation();return;}
+    if(e.shiftKey&&_colSel.first){
+        e.preventDefault();
+        var ft=_colSel.first;
+        selClearCols();
+        var $ths=$("#tableHead th.col-head");
+        var idx1=$ths.index(ft),idx2=$ths.index(this);
+        _colSel={first:ft,cols:[]};
+        for(var i=Math.min(idx1,idx2);i<=Math.max(idx1,idx2);i++){
+            $ths.eq(i).addClass("selected-header");
+            _colSel.cols.push($ths.eq(i).data("field"));
+        }
+        mirrorColSelection();
+    }else if(e.ctrlKey||e.metaKey){
+        e.preventDefault();
+        $(this).toggleClass("selected-header");
+        var fld=$(this).data("field");
+        var idx=$.inArray(fld,_colSel.cols);
+        if(idx>=0)_colSel.cols.splice(idx,1);
+        else _colSel.cols.push(fld);
+        _colSel.first=this;
+        mirrorColSelection();
+    }
+});
+// 绑定列头选中事件（用 VTable 式：container 级捕获，全局 mousemove 跟踪）
+$(document).on("mousedown","#tableHead th.col-head",colHeadMouseDown);
+$(document).on("mousemove",colHeadGlobalMove);
+$(document).on("mouseup",colHeadGlobalUp);
+// 右键菜单（列）
+$(document).on("contextmenu","#tableHead th.col-head",function(e){e.preventDefault();
+    var fld=$(this).data("field"),typ=$(this).attr("data-type")||"";
+    $("#colMenu").data("field",fld);
+    $("#colTypeInfo").text("类型: "+typ);
+    var isKf=(fld===_currentKf);
+    $("#colMenu").find('[data-action="toggle-key-field"]').text(isKf?"🚫 取消核心字段":"🔑 设为核心字段");
+    // 多选模式：显示隐藏已选列
+    if(_colSel.cols.length>1){
+        $("#colMenu").find('[data-action="hide-col"]').text('👁 隐藏已选 '+_colSel.cols.length+' 列');
+    }else{
+        $("#colMenu").find('[data-action="hide-col"]').text('👁 隐藏本列');
+    }
+    posMenu($("#colMenu"),e);$("#rowMenu").hide();});
+$("#colMenu").on("click",".context-menu-item",function(){
+    var action=$(this).data("action"),fld=$("#colMenu").data("field");$("#colMenu").hide();
+    if(action==="change-type"){var cur=$("#colTypeInfo").text().replace("类型: ","");var $sel=$("<select class='form-select form-select-sm' style='position:fixed;z-index:10000;min-width:160px'>").appendTo("body");var opts=[{v:"VARCHAR(255)",l:"VARCHAR(255)"},{v:"INT",l:"INT"},{v:"DOUBLE",l:"DOUBLE(小数)"},{v:"BIGINT",l:"BIGINT(大整数)"},{v:"DATE",l:"DATE(日期)"},{v:"TEXT",l:"TEXT(长文本)"}];opts.forEach(function(t){$sel.append("<option value='"+t.v+"'>"+t.l+"</option>");});$sel.val(cur).css({left:$("#colMenu").offset().left,top:$("#colMenu").offset().top+$("#colMenu").height()}).focus();$sel.on("change",function(){var nt=$(this).val();$(this).remove();if(nt)$.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/column/"+encodeURIComponent(fld)+"/type",type:"PATCH",contentType:"application/json",data:JSON.stringify({type:nt}),success:function(r){if(r.code===0)fp(ct,cp);else alert(r.msg);}});});$sel.on("blur",function(){var t=this;setTimeout(function(){if($(t).is(":visible"))$(t).remove();},200);});}
+    if(action==="insert-col"){var nn=prompt("新列名：","新字段");if(nn&&nn.trim())$.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/column",type:"POST",contentType:"application/json",data:JSON.stringify({name:nn.trim(),after:fld}),success:function(r){if(r.code===0)fp(ct,cp);else alert(r.msg);}});}
+    if(action==="hide-col"){
+        var cols=_colSel.cols.length>1?_colSel.cols:[fld];
+        $.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/column/hide",type:"POST",contentType:"application/json",
+            data:JSON.stringify({columns:cols}),
+            success:function(r){if(r.code===0){cols.forEach(function(c){if(_hiddenCols.indexOf(c)<0)_hiddenCols.push(c);});applyHiddenCols();selClearCols();}else alert(r.msg);}
+        });
+    }
+    if(action==="delete-col"&&confirm("确认删除列「"+fld+"」？该列数据将永久丢失！"))$.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/column/"+encodeURIComponent(fld),type:"DELETE",success:function(r){if(r.code===0)fp(ct,cp);else alert(r.msg);}});
+    if(action==="toggle-key-field"){
+        var newKf=(_currentKf===fld)?"":fld;
+        $.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/key-field",type:"PUT",contentType:"application/json",
+            data:JSON.stringify({key_field:newKf}),
+            success:function(r){if(r.code===0)fp(ct,cp);else alert(r.msg);}});
+    }
+    if(action==="reorder-cols"){
+        var $list=$("#reorderList").empty();
+        var flds=[];
+        $.ajax({url:"/api/table/"+encodeURIComponent(ct),type:"GET",async:false,success:function(r){
+            if(r.code===0) r.data.schema.forEach(function(c){if(c.field!="id"&&c.field!="_deleted")flds.push(c.field);});
+        }});
+        flds.forEach(function(f,i){
+            var $item=$('<div class="list-group-item d-flex justify-content-between align-items-center" data-field="'+f+'">'
+                +'<span class="text-muted small me-2" style="width:24px;text-align:right">'+(i+1)+'.</span>'
+                +'<span class="flex-grow-1">'+f+'</span>'
+                +'<div><button class="btn btn-sm btn-outline-secondary me-1 reorder-up" '+(i==0?'disabled':'')+' title="上移">↑</button>'
+                +'<button class="btn btn-sm btn-outline-secondary reorder-down" '+(i==flds.length-1?'disabled':'')+' title="下移">↓</button></div>'
+                +'</div>');
+            $list.append($item);
+        });
+        // 上移/下移
+        $list.off("click",".reorder-up,.reorder-down").on("click",".reorder-up,.reorder-down",function(){
+            var $item=$(this).closest(".list-group-item");
+            var isUp=$(this).hasClass("reorder-up");
+            var $swap=isUp?$item.prev(".list-group-item"):$item.next(".list-group-item");
+            if(!$swap.length)return;
+            if(isUp) $item.insertBefore($swap);
+            else $item.insertAfter($swap);
+            // 重新编号
+            $list.children().each(function(i){
+                $(this).find("span:first").text((i+1)+".");
+                $(this).find(".reorder-up").prop("disabled",i===0);
+                $(this).find(".reorder-down").prop("disabled",i===$list.children().length-1);
+            });
+        });
+        (new bootstrap.Modal(document.getElementById("reorderModal"))).show();
+    }
+});
+
+// ── 字段顺序调整 ────────────────────────────────
+$("#confirmReorder").click(function(){
+    var $btn=$(this);$btn.prop("disabled",true);
+    var cols=[];
+    $("#reorderList .list-group-item").each(function(){cols.push($(this).data("field"));});
+    $.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/reorder-columns",type:"PUT",
+        contentType:"application/json",data:JSON.stringify({columns:cols}),
+        success:function(r){
+            if(r.code===0){
+                bootstrap.Modal.getInstance(document.getElementById("reorderModal")).hide();
+                fp(ct,cp);
+            }else alert(r.msg);
+        },
+        error:function(){alert("保存失败");},
+        complete:function(){$btn.prop("disabled",false);}
+    });
+});
+
+// ========== 选区 + 复制/粘贴 ==========
+var _sel={active:false,cells:[],fields:[],firstTd:null};
+
+function selClear(){
+    if(_dragSel._pt)return; // 拖拽保护中不清除选中
+    $("#tableBody td").removeClass("selected-cell");
+    $("#tableBody td .fill-handle").remove();
+    $("#tableHead th").removeClass("selected-header");
+    _sel={active:false,cells:[],fields:[],firstTd:null};
+}
+
+function selCols(){return $("#tableBody tr:first td.editable").length||1;}
+
+// ── 拖拽选中 + 单击/Shift选中 ────────────────────
+var _dragSel={active:false,startTd:null,moved:false,_pt:false};
+$(document).on("mousedown","td.editable",function(e){
+    if(e.shiftKey||e.ctrlKey||e.metaKey)return;
+    if($(e.target).is(".fill-handle,.cell-editor"))return;
+    e.preventDefault();
+    if(window.getSelection)window.getSelection().removeAllRanges();
+    _dragSel={active:true,startTd:this,moved:false,_pt:false};
+}).on("mousemove",function(e){
+    if(!_dragSel.active||!_dragSel.startTd)return;
+    // 找到鼠标下方所在的单元格
+    var td=document.elementFromPoint(e.clientX,e.clientY);
+    var $td=$(td).closest("td.editable");
+    if(!$td.length||$td.is(_dragSel.startTd)&&!_dragSel.moved)return;
+    // 可见的鼠标移动即视为拖拽
+    if(!_dragSel.moved)_dragSel.moved=true;
+    var $tds=$("#tableBody td.editable"),nc=selCols();
+    var idxS=$tds.index(_dragSel.startTd),idxC=$tds.index($td);
+    if(idxS<0||idxC<0)return;
+    var r1=Math.floor(idxS/nc),c1=idxS%nc,r2=Math.floor(idxC/nc),c2=idxC%nc;
+    $("#tableBody td").removeClass("selected-cell");
+    $("#tableBody td .fill-handle").remove();
+    _sel={active:true,cells:[],fields:[],firstTd:_dragSel.startTd};
+    for(var r=Math.min(r1,r2);r<=Math.max(r1,r2);r++)
+        for(var c=Math.min(c1,c2);c<=Math.max(c1,c2);c++){
+            var td2=$tds.eq(r*nc+c);if(td2.length){td2.addClass("selected-cell");_sel.cells.push(td2);}
+        }
+    _sel.fields=_sel.cells.map(function(td){return td.data("field");}).filter(function(v,i,a){return a.indexOf(v)===i;});
+}).on("mouseup",function(e){
+    var $td=$(e.target).closest("td.editable");
+    if(_dragSel.active&&_dragSel.moved){
+        _dragSel.active=false;
+        // 保护：阻止 click 事件清空选中的单元格
+        _dragSel._pt=true;
+        setTimeout(function(){_dragSel._pt=false;},300);
+        return;
+    }
+    if(_dragSel.active){
+        _dragSel.active=false;
+        // 非拖拽 -> 单击/Shift单击
+        if($td.length){
+            if(e.shiftKey && _sel.firstTd){
+                var ft=_sel.firstTd;if($td.is($(ft)))return;
+                $("#tableBody td").removeClass("selected-cell");
+                $("#tableBody td .fill-handle").remove();
+                var $tds=$("#tableBody td.editable"),nc=selCols();
+                var idx1=$tds.index(ft),idx2=$tds.index($td);
+                var r1=Math.floor(idx1/nc),c1=idx1%nc,r2=Math.floor(idx2/nc),c2=idx2%nc;
+                _sel={active:true,cells:[],fields:[],firstTd:ft};
+                for(var r=Math.min(r1,r2);r<=Math.max(r1,r2);r++)
+                    for(var c=Math.min(c1,c2);c<=Math.max(c1,c2);c++){
+                        var td2=$tds.eq(r*nc+c);if(td2.length){td2.addClass("selected-cell");_sel.cells.push(td2);}
+                    }
+                _sel.fields=_sel.cells.map(function(td){return td.data("field");}).filter(function(v,i,a){return a.indexOf(v)===i;});
+            }else if(!e.shiftKey){
+                $("#tableBody td").removeClass("selected-cell");
+                $("#tableBody td .fill-handle").remove();
+                $td.addClass("selected-cell");
+                _sel={active:true,cells:[$td],fields:[$td.data("field")],firstTd:$td[0]};
+                if(!$td.find(".fill-handle").length)$td.append('<div class="fill-handle" title="下拉填充"></div>');
+            }
+        }
+    }
+});
+// 保护：拖拽后拦截 click，避免清除选中
+$(document).on("click","td.editable",function(e){
+    if(_dragSel._pt){e.stopImmediatePropagation();e.preventDefault();return;}
+});
+// 填充柄：拖拽填充
+var _fillDrag={active:false};
+$(document).on("mousedown",".fill-handle",function(e){
+    e.preventDefault();e.stopPropagation();
+    var $src=$(this).closest("td.editable");
+    _fillDrag={active:true,src:$src,val:$src.data("val"),fld:$src.data("field"),
+        srcRow:$src.closest("tr").data("id"),startIdx:$("#tableBody td.editable").index($src)};
+}).on("mouseover","td.editable",function(){
+    if(!_fillDrag.active)return;
+    var $td=$(this);if($td.is(_fillDrag.src))return;
+    // 只高亮同列的单元格
+    var nc=selCols();var srcIdx=_fillDrag.startIdx;
+    var idx=$("#tableBody td.editable").index($td);
+    if(idx%nc===srcIdx%nc){$td.addClass("fill-target");_fillDrag.tgt=$td;}
+}).on("mouseup",function(){
+    if(!_fillDrag.active)return;
+    _fillDrag.active=false;
+    var $src=_fillDrag.src,val=_fillDrag.val,srcRow=_fillDrag.srcRow,colIdx=$("#tableBody td.editable").index($src);
+    var nc=selCols();var srcC=colIdx%nc,srcR=Math.floor(colIdx/nc);
+    $(".fill-target").each(function(){
+        var $td=$(this);var idx=$("#tableBody td.editable").index($td);
+        var r=Math.floor(idx/nc);
+        // 同列才填充
+        if(idx%nc!==srcC)return;
+        var rid=$td.closest("tr").data("id"),fld=$td.data("field");
+        if(rid===undefined)return;
+        $td.data("val",val).html(displayVal(val,fld)).removeClass("fill-target");
+        $.ajax({url:"/api/table/"+ct,type:"PATCH",contentType:"application/json",
+            data:JSON.stringify({id:rid,field:fld,value:val}),
+            error:function(xhr){console.log("fill err:",xhr.status);}
+        });
+    });
+    $(".fill-target").removeClass("fill-target");
+});
+
+// Ctrl+C — 复制选中范围（使用可见文本确保所见即所得）
+$(document).on("keydown",function(e){
+    if(!(e.ctrlKey||e.metaKey)||e.key!=="c")return;
+    if($(document.activeElement).is(".cell-editor"))return;
+    if(!_sel.active||!_sel.cells.length)return;
+    var fields=_sel.fields;var selRows={};
+    _sel.cells.forEach(function(td){
+        var rid=td.closest("tr").data("id"),fld=td.data("field");
+        var val=td.text().trim();
+        if(!selRows[rid])selRows[rid]={};selRows[rid][fld]=val;
+    });
+    var tablename=ct||$("#tableName").text();
+    var rowsData=[];Object.keys(selRows).forEach(function(rid){
+        var row=[];fields.forEach(function(f){row.push(selRows[rid][f]!==undefined?selRows[rid][f]:null);});rowsData.push(row);
+    });
+    $.ajax({url:"/api/clipboard/copy",type:"POST",contentType:"application/json",
+        data:JSON.stringify({table:tablename,key_field:ctPk,fields:fields,rows:rowsData}),
+        success:function(r){if(r.code===0){selClear();}},
+        error:function(){alert("复制失败");}
+    });
+    e.preventDefault();
+});
+
+// Ctrl+V
+$(document).on("keydown",function(e){
+    if(!(e.ctrlKey||e.metaKey)||e.key!=="v")return;
+    // 如果正在编辑单元格（输入框有焦点），不拦截原生粘贴
+    if($(document.activeElement).is(".cell-editor"))return;
+    if(!_sel.active||!_sel.firstTd)return;
+    $.getJSON("/api/clipboard",function(r){
+        if(r.code!==0){alert("剪贴板为空，请先在源表 Ctrl+C");return;}
+        var tablename=ct||$("#tableName").text();
+        $.ajax({url:"/api/clipboard/paste",type:"POST",contentType:"application/json",
+            data:JSON.stringify({target:tablename}),
+            success:function(r2){if(r2.code===0){alert(r2.msg);fp(ct,cp);}else alert(r2.msg);},
+            error:function(){alert("粘贴失败");}
+        });
+    });
+    e.preventDefault();
+});
+
+// 点击空白取消选区
+$(document).on("click",function(e){
+    if(!$(e.target).closest("#dataTable td,#dataTable th").length)selClear();
+});
+
+// 右键菜单加复制/粘贴项
+$("#rowMenu .context-menu-item[data-action='delete-row']").before(
+    '<div class="context-menu-item" data-action="copy-rows">📋 复制选中行</div>'
+);
+
+$(document).on("dblclick","td.editable",function(){
+    var td=$(this);if(td.find("input").length)return;
+    var val=td.data("val")||"",fld=td.data("field"),rid=td.closest("tr").data("id");
+    td.html('<input type="text" class="form-control form-control-sm cell-editor" value="'+String(val).replace(/"/g,"&quot;")+'">');
+    setSaveStatus("editing");
+    var inp=td.find("input");inp.focus();inp.select();
+    inp.on("blur",function(){saveCell(td,rid,fld,inp.val());});
+    inp.on("keydown",function(e){if(e.key==="Enter")inp.blur();if(e.key==="Escape"){td.html(displayVal(td.data("val"),fld));setSaveStatus("saved");}});
+});
+function saveCell(td,rid,fld,val){
+    var old=td.data("val");if(old===val){td.html(displayVal(val,fld));return;}
+    $.ajax({url:"/api/table/"+ct,type:"PATCH",contentType:"application/json",data:JSON.stringify({id:rid,field:fld,value:val}),
+        success:function(r){if(r.code===0){td.data("val",val);td.html(displayVal(val,fld));var m=r.msg;if(m.indexOf("同步")>0){var s=m.split("（")[1]||"";$("#totalRecords").append('<span class="ms-2 text-success small">↗️ '+s+'</span>');}
+            // 自动补全：编辑映射中关键字段→跨表拉取
+            if(val&&val!==0&&syncMappings.length){var $tr=td.closest("tr"),emptyTds=$tr.find("td.editable").filter(function(){return!$(this).data("val")&&$(this).data("val")!==0&&$(this).data("field")!==fld;});
+                if(emptyTds.length&&syncMappings.some(function(m){return(m.st===ct||m.tt===ct)&&m.kf===fld;})){
+                    $.ajax({url:"/api/sync/auto-fill",type:"POST",contentType:"application/json",data:JSON.stringify({table:ct,key_field:fld,key_value:val,row_id:rid}),
+                        success:function(r2){if(r2.code===0){for(var f in r2.data){var nv=r2.data[f];var $td=$tr.find("td.editable[data-field='"+f+"']");if($td.length&&!$td.data("val")&&$td.data("val")!==0){$td.data("val",nv).html(displayVal(nv,f));$.ajax({url:"/api/table/"+ct,type:"PATCH",contentType:"application/json",data:JSON.stringify({id:rid,field:f,value:nv}),async:true});}}}}});
+                }
+            }
+        }else{td.html(displayVal(old,fld));alert(r.msg);}},
+        error:function(xhr){td.html(displayVal(old,fld));console.log("save err:",xhr.status,xhr.responseText);}
+    });
+}
+function displayVal(val,fld){if(!val&&val!==0)return'';if(isFloat(ftypes[fld]||"")&&!isNaN(val))return Number(val).toFixed(2);return String(val);}
+
+$(document).on("dblclick","th.col-head",function(){
+    var th=$(this);if(th.find("input").length)return;var old=th.data("field");if(old==="id")return;var html=th.html();
+    th.html('<input type="text" class="form-control form-control-sm" value="'+old+'" style="font-weight:bold">');
+    var inp=th.find("input");inp.focus();inp.select();
+    inp.on("blur",function(){if(inp.val().trim()&&inp.val().trim()!==old)renameCol(th,old,inp.val().trim());else th.html(html);});
+    inp.on("keydown",function(e){if(e.key==="Enter")inp.blur();if(e.key==="Escape")th.html(html);});
+});
+function renameCol(th,old,nn){$.ajax({url:"/api/table/"+ct+"/column",type:"PUT",contentType:"application/json",data:JSON.stringify({old:old,new:nn}),success:function(r){if(r.code===0)fp(ct,cp);else{th.html(old+'<br><small class="text-muted">...</small>');alert(r.msg);}},error:function(){th.html(old+'<br><small class="text-muted">...</small>');}});}
+
+$("#deleteTableBtn").click(function(){$("#deleteTableName").text(ct);M.d.show();});
+$("#confirmDelete").click(function(){$.ajax({url:"/api/table/"+ct,type:"DELETE",contentType:"application/json",data:JSON.stringify({del_token:_delToken}),success:function(r){M.d.hide();if(r.code===0){ct="";$("#tableView").hide();$("#emptyState").show();lt();}else alert(r.msg);}});});
+$("#renameTableBtn").click(function(){$("#renameInput").val(ct);$("#renameResult").empty();M.r.show();});
+$("#confirmRename").click(function(){var n=$("#renameInput").val().trim();if(!n||n===ct){M.r.hide();return;}$("#confirmRename").prop("disabled",true);$.ajax({url:"/api/table/"+ct,type:"PUT",contentType:"application/json",data:JSON.stringify({new_name:n}),success:function(r){if(r.code===0){lt(n);M.r.hide();}else{$("#renameResult").html('<div class="text-danger small">❌ '+r.msg+'</div>');}},complete:function(){$("#confirmRename").prop("disabled",false);}});});
+
+$("#uploadBtn").click(function(){$("#fileInput").val("");$("#uploadResult").empty();M.u.show();});
+$("#submitUpload").click(function(){var f=document.getElementById("fileInput");if(!f.files||!f.files[0]){alert("请选择");return;}var fd=new FormData();fd.append("file",f.files[0]);$("#uploadProgress").removeClass("d-none");$("#submitUpload").prop("disabled",true);$.ajax({url:"/api/upload/parse",type:"POST",data:fd,processData:false,contentType:false,success:function(r){$("#uploadProgress").addClass("d-none");if(r.code===0){M.u.hide();showImport(r.data);}else{$("#uploadResult").html('<div class="alert alert-danger mb-0">❌ '+r.msg+'</div>');}},error:function(){alert("失败");},complete:function(){$("#submitUpload").prop("disabled",false);}});});
+function showImport(d){
+    sid=d.session_id;ah=d.headers;pd=d.preview;var sel=$("#sheetSelect");
+    if(d.sheets.length>1){sel.show().empty();d.sheets.forEach(function(s){sel.append('<option value="'+s+'">'+s+'</option>');});sel.off("change").change(function(){if(ls)return;ls=true;$.ajax({url:"/api/upload/select_sheet",type:"POST",contentType:"application/json",data:JSON.stringify({session_id:sid,sheet:$(this).val()}),success:function(r){if(r.code===0){ah=r.data.headers;pd=r.data.preview;$("#parseInfo").html("✅ 共 <strong>"+r.data.total_rows+"</strong> 行，<strong>"+r.data.headers.length+"</strong> 列");rf(r.data.headers);rp();updateTitle($("#sheetSelect").val());}},complete:function(){ls=false;}});});}else sel.hide();
+    $("#headerRowStart").val(d.header_row_start||1);$("#headerRowEnd").val(d.header_row_end||1);function reloadHeaders(){var s=parseInt($("#headerRowStart").val())||1,e=parseInt($("#headerRowEnd").val())||1;if(s>e){e=s;$("#headerRowEnd").val(e);}$.ajax({url:"/api/upload/set_header_rows",type:"POST",contentType:"application/json",data:JSON.stringify({session_id:sid,header_row_start:s,header_row_end:e}),success:function(r){if(r.code===0){ah=r.data.headers;pd=r.data.preview;$("#parseInfo").html("✅ 共 <strong>"+r.data.total_rows+"</strong> 行，<strong>"+r.data.headers.length+"</strong> 列");rf(r.data.headers);rp();}}});}$("#headerRowStart,#headerRowEnd").off("change").change(reloadHeaders);
+    // 标题：优先 detected_title（自动检测的原始标题），否则文件名_sheet名
+    _importFilename = d.filename ? d.filename.replace(/\.[^.]+$/,"") : "";
+    if(d.detected_title){$("#tableTitleInput").val(d.detected_title);}else{updateTitle(d.sheets && d.sheets[0] || "");}
+    $("#parseInfo").html("✅ 共 <strong>"+d.total_rows+"</strong> 行，<strong>"+d.headers.length+"</strong> 列");rf(d.headers);rp();M.i.show();
+}
+function updateTitle(sn){
+    var title = _importFilename || "";
+    if(sn && !/^Sheet\d+$/i.test(sn) && !/^工作表\d+$/.test(sn)) title = _importFilename + "_" + sn;
+    $("#tableTitleInput").val(title);
+}
+function rf(hd){var box=$("#fieldCheckboxes").empty();hd.forEach(function(h){var s=false;["序号","顺序","排号"].forEach(function(k){if(h.indexOf(k)>=0)s=true;});box.append('<div class="form-check form-check-inline mb-1"><input class="form-check-input field-cb" type="checkbox" value="'+h+'" '+(s?'':'checked')+' id="cb_'+h.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g,'_')+'"><label class="form-check-label small" for="cb_'+h.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g,'_')+'">'+h+'</label></div>');});
+    var sel=$("#keyFieldSelect").empty();sel.append('<option value="">--</option>');hd.forEach(function(h){sel.append('<option value="'+h+'">'+h+'</option>');});var f=false;["编号","代码","ID","id","名称"].forEach(function(k){if(!f){var x=hd.filter(function(h){return h.indexOf(k)>=0;});if(x.length){sel.val(x[0]);f=true;}}});
+}
+function rp(){var sel=[];$(".field-cb:checked").each(function(){sel.push($(this).val());});var idx=sel.map(function(h){return ah.indexOf(h);}).filter(function(i){return i>=0;});var th=$("#previewHead").empty(),tr=$("<tr></tr>");sel.forEach(function(h){tr.append("<th>"+h+"</th>");});th.append(tr);var tb=$("#previewBody").empty();pd.forEach(function(row){var tr2=$("<tr></tr>");idx.forEach(function(i){var v=(row[i]===null||row[i]===undefined)?'<span class="text-muted">(空)</span>':row[i];tr2.append("<td>"+v+"</td>");});tb.append(tr2);});}
+$(document).on("change",".field-cb",rp);
+
+$("#confirmImport").click(function(){var k=$("#keyFieldSelect").val();if(!k){alert("请选择关键字段");return;}var fl=[];$(".field-cb:checked").each(function(){fl.push($(this).val());});if(fl.indexOf(k)<0){alert("关键字段未勾选");return;}$("#confirmImport").prop("disabled",true);$.ajax({url:"/api/upload/import",type:"POST",contentType:"application/json",data:JSON.stringify({session_id:sid,key_field:k,fields:fl,title:$("#tableTitleInput").val().trim()}),success:function(r){if(r.code===0){$("#importResult").html('<div class="alert alert-success mb-0">✅ '+r.msg+'</div>');lt();setTimeout(function(){M.i.hide();},2500);}else{$("#importResult").html('<div class="alert alert-danger mb-0">❌ '+r.msg+'</div>');}},complete:function(){$("#confirmImport").prop("disabled",false);}});});
+$("#cancelImport").click(function(){$.ajax({url:"/api/upload/import",type:"POST",contentType:"application/json",data:JSON.stringify({session_id:sid,key_field:"",fields:[]}),async:false});});
+
+// ========== 字段映射 ==========
+var syncMappings=[],fieldCache={},_editingIdx=-1;
+$("#syncBtn").click(function(){loadSync();M.s.show();});
+function loadSync(){
+    $.getJSON("/api/tables",function(r){if(r.code)return;var o1='<option value="">源表</option>',o2='<option value="">目标表</option>';r.data.forEach(function(t){o1+='<option value="'+t.name+'">'+t.name+'</option>';o2+='<option value="'+t.name+'">'+t.name+'</option>';});$("#syncSrcTable").html(o1);$("#syncTgtTable").html(o2);});
+    $.getJSON("/api/sync/mappings",function(r){if(r.code)return;syncMappings=r.data;renderSyncList();});
+}
+function renderSyncList(){var box=$("#syncList").empty();if(!syncMappings.length){box.html('<div class="text-muted small">暂无映射。新建一个：选择源表/目标表/关键字段，点「加载字段对」，调整后保存。</div>');return;}
+    syncMappings.forEach(function(m,i){var ps=m.ps.map(function(p){return p.s+" ↔ "+p.t;}).join(", ");box.append('<div class="card mb-2"><div class="card-body py-2"><div class="d-flex justify-content-between"><span><strong>'+m.st+'</strong> ➔ <strong>'+m.tt+'</strong>（关键: '+m.kf+'）</span><span><button class="btn btn-sm btn-outline-primary edit-sync me-1" data-idx="'+i+'">✎ 编辑</button><button class="btn btn-sm btn-outline-danger del-sync" data-idx="'+i+'">✕</button></span></div><div class="small text-muted">'+ps+'</div></div></div>');});
+    $(".del-sync").click(function(){syncMappings.splice(parseInt($(this).data("idx")),1);renderSyncList();});
+    $(".edit-sync").click(function(){editMapping(parseInt($(this).data("idx")));});
+}
+$("#syncSrcTable").change(function(){preloadFields($(this).val());});
+$("#syncTgtTable").change(function(){preloadFields($(this).val());});
+function preloadFields(tbl){if(fieldCache[tbl])return;$.getJSON("/api/sync/schema/"+tbl,function(r){if(r.code===0&&r.data){var o='<option value="">-</option>';r.data.forEach(function(f){o+='<option value="'+f.field+'">'+f.field+' ('+f.type+')</option>';});fieldCache[tbl]=o;}});}
+function editMapping(idx){
+    var m=syncMappings[idx];
+    _editingIdx=idx;
+    $("#syncSrcTable").val(m.st);$("#syncTgtTable").val(m.tt);
+    preloadFields(m.st);preloadFields(m.tt);
+    var waitLoad=setInterval(function(){
+        if(fieldCache[m.st]&&fieldCache[m.tt]){
+            clearInterval(waitLoad);
+            var ko='<option value="">关键字段</option>';
+            $(fieldCache[m.st]).each(function(){var v=$(this).val();if(v)ko+='<option value="'+v+'">'+v+'</option>';});
+            $("#syncKeyField").html(ko).val(m.kf);
+            $("#syncPairs").empty();
+            m.ps.forEach(function(p){
+                var row='<div class="row g-2 mb-1 align-items-center sync-pair">'+
+                    '<div class="col-md-5"><select class="form-select form-select-sm sync-src-fld">'+fieldCache[m.st]+'</select></div>'+
+                    '<div class="col-md-1 text-center">↔</div>'+
+                    '<div class="col-md-4"><select class="form-select form-select-sm sync-tgt-fld">'+fieldCache[m.tt]+'</select></div>'+
+                    '<div class="col-md-2" style="white-space:nowrap"><button class="btn btn-sm btn-outline-danger remove-pair">✕</button></div></div>';
+                var $r=$(row);$r.find(".sync-src-fld").val(p.s);$r.find(".sync-tgt-fld").val(p.t);
+                $("#syncPairs").append($r);
+            });
+            $(".remove-pair").off("click").on("click",function(){$(this).closest(".sync-pair").remove();});
+            $("#syncSaveBtn").text("✅ 更新映射");
+            $("#syncCancelEdit").show();
+            $("#syncResult").html('<span class="text-info small">✎ 正在编辑第 '+(idx+1)+' 条映射</span>');
+        }
+    },100);
+}
+function showFieldPairs(){
+    var st=$("#syncSrcTable").val(),tt=$("#syncTgtTable").val();
+    if(!st||!tt){alert("请先选择源表和目标表");return;}
+    if(!fieldCache[st]||!fieldCache[tt]){alert("字段列表尚未加载，请稍后重试");return;}
+    var src=[];$(fieldCache[st]).each(function(){var v=$(this).val();if(v)src.push(v);});
+    var tgt=[];$(fieldCache[tt]).each(function(){var v=$(this).val();if(v)tgt.push(v);});
+    // 保留用户已设置的字段对，只补充缺失的
+    var existingSrcs={};
+    $("#syncPairs .sync-pair").each(function(){
+        var sv=$(this).find(".sync-src-fld").val();
+        if(sv)existingSrcs[sv]=true;
+    });
+    src.forEach(function(sf){
+        if(existingSrcs[sf])return; // 已存在的不覆盖
+        var at=tgt.indexOf(sf)>=0?sf:"";
+        var isDiff=at!==sf&&at!=="";
+        var warnHtml=isDiff?' <span class="badge bg-warning text-dark" title="字段名不一致" style="cursor:pointer">⚠️ 名异</span>':'';
+        var unifyHtml=isDiff?' <button class="btn btn-sm btn-outline-warning unify-field" data-src="'+st+'" data-tgt="'+tt+'" data-sf="'+sf+'" data-tf="'+at+'" title="统一字段名">统一</button>':'';
+        var row='<div class="row g-2 mb-1 align-items-center sync-pair">'+
+            '<div class="col-md-5"><select class="form-select form-select-sm sync-src-fld">'+fieldCache[st]+'</select></div>'+
+            '<div class="col-md-1 text-center">↔</div>'+
+            '<div class="col-md-4"><select class="form-select form-select-sm sync-tgt-fld">'+fieldCache[tt]+'</select></div>'+
+            '<div class="col-md-2" style="white-space:nowrap">'+warnHtml+unifyHtml+'<button class="btn btn-sm btn-outline-danger remove-pair">✕</button></div></div>';
+        var $r=$(row);$r.find(".sync-src-fld").val(sf);if(at)$r.find(".sync-tgt-fld").val(at);
+        $("#syncPairs").append($r);
+    });
+    $(".remove-pair").off("click").on("click",function(){$(this).closest(".sync-pair").remove();});
+    // 统一字段名点击处理
+    $(".unify-field").off("click").on("click",function(){
+        var srcTbl=$(this).data("src"),tgtTbl=$(this).data("tgt");
+        var srcFld=$(this).data("sf"),tgtFld=$(this).data("tf");
+        if(!confirm('字段名不一致：「'+srcTbl+'」中为「'+srcFld+'」，「'+tgtTbl+'」中为「'+tgtFld+'」。\n统一为「'+srcFld+'」（将重命名目标表字段「'+tgtFld+'」→「'+srcFld+'」）？'))return;
+        $.ajax({url:"/api/table/"+encodeURIComponent(tgtTbl)+"/column",type:"PUT",contentType:"application/json",
+            data:JSON.stringify({old:tgtFld,new:srcFld}),
+            success:function(r){
+                if(r.code===0){
+                    // 刷新目标表缓存的字段列表
+                    $.getJSON("/api/table/"+encodeURIComponent(tgtTbl),function(r2){
+                        if(r2.code===0){
+                            var opts='<option value=""></option>';
+                            r2.data.schema.forEach(function(c){if(c.field!="id"&&c.field!="_deleted")opts+='<option value="'+c.field+'">'+c.field+'</option>';});
+                            fieldCache[tgtTbl]=opts;
+                        }
+                        showFieldPairs();
+                    });
+                }else alert("统一失败: "+r.msg);
+            },
+            error:function(){alert("请求失败");}
+        });
+    });
+    // 加载关键字段下拉
+    var ko='<option value="">关键字段</option>';$(fieldCache[st]).each(function(){var v=$(this).val();if(v)ko+='<option value="'+v+'">'+v+'</option>';});$("#syncKeyField").html(ko);
+}
+$("#syncLoadPairsBtn").click(showFieldPairs);
+// 取消编辑
+$("#syncCancelEdit").click(function(){_editingIdx=-1;$("#syncSaveBtn").text("保存映射");$("#syncCancelEdit").hide();$("#syncPairs").empty();$("#syncSrcTable").val("");$("#syncTgtTable").val("");$("#syncKeyField").html('<option value="">关键字段</option>');$("#syncResult").empty();});
+
+function doVerify(st,tt,kf,pairs,resultCallback){
+    $.ajax({url:"/api/sync/verify",type:"POST",contentType:"application/json",data:JSON.stringify({source:st,target:tt,key_field:kf,pairs:pairs}),
+        success:function(r){if(r.code===0)resultCallback(null,r.data);else resultCallback(r.msg);},
+        error:function(){resultCallback("请求失败");}
+    });
+}
+$("#syncVerifyBtn").click(function(){var $btn=$(this);$btn.prop("disabled",true);$("#syncVerifyResult").empty();$("#syncVerifySummary").html("核实中...");
+    var st=$("#syncSrcTable").val(),tt=$("#syncTgtTable").val(),kf=$("#syncKeyField").val();
+    var pairs=[];$(".sync-pair").each(function(){var s=$(this).find(".sync-src-fld").val(),t=$(this).find(".sync-tgt-fld").val();if(s&&t)pairs.push({s:s,t:t});});
+    var tasks=[];
+    if(st&&tt&&kf&&pairs.length){tasks.push({st:st,tt:tt,kf:kf,ps:pairs});}
+    else if(syncMappings.length){syncMappings.forEach(function(m){tasks.push(m);});}
+    if(!tasks.length){alert("请先配置或保存映射");$btn.prop("disabled",false);return;}
+    var done=0,total=tasks.length,allErrs=[],allSrcOnly=0,allTgtOnly=0,allMatched=0,allSrc=0,allTgt=0;
+    tasks.forEach(function(t){
+        doVerify(t.st,t.tt,t.kf,t.ps,function(err,data){
+            done++;
+            if(err){$("#syncVerifySummary").html('<span class="text-danger">❌ 核实失败: '+err+'</span>');return;}
+            allSrc+=data.total_src;allTgt+=data.total_tgt;allMatched+=data.matched;
+            allSrcOnly+=data.src_only;allTgtOnly+=data.tgt_only;
+            if(data.errors.length)allErrs=allErrs.concat(data.errors.map(function(e){
+                e._mp=t.st+' ↔ '+t.tt;return e;
+            }));
+            if(done===total){$btn.prop("disabled",false);
+                var sum='共 '+tasks.length+' 组映射，源表 '+allSrc+' 条，目标表 '+allTgt+' 条';
+                if(allSrcOnly>0)sum+='，源表独有 <span class="text-warning">'+allSrcOnly+'</span> 条';
+                if(allTgtOnly>0)sum+='，目标表独有 <span class="text-warning">'+allTgtOnly+'</span> 条';
+                if(!allErrs.length){$("#syncVerifySummary").html(sum+'，✅ 全部一致');$("#syncVerifyResult").html('<div class="alert alert-success py-1 mb-0">✅ 所有映射字段数据一致</div>');return;}
+                $("#syncVerifySummary").html(sum+'，⚠️ <span class="text-danger fw-bold">'+allErrs.length+' 处不一致</span>');
+                var tbl='<table class="table table-sm table-bordered mt-1 mb-0" style="font-size:.85em"><thead><tr><th>映射</th><th>关键值</th><th>字段</th><th>源值</th><th>目标值</th></tr></thead><tbody>';
+                allErrs.forEach(function(e){tbl+='<tr><td class="small text-muted">'+e._mp+'</td><td>'+e.key+'</td><td>'+e.field_src+' ↔ '+e.field_tgt+'</td><td class="text-danger">'+e.val_src+'</td><td class="text-warning">'+e.val_tgt+'</td></tr>';});
+                tbl+='</tbody></table>';$("#syncVerifyResult").html('<div class="alert alert-warning py-1 mb-0">⚠️ 发现 <strong>'+allErrs.length+'</strong> 处不一致：</div>'+tbl);
+            }
+        });
+    });
+});
+$("#syncSaveBtn").click(function(){var st=$("#syncSrcTable").val(),tt=$("#syncTgtTable").val(),kf=$("#syncKeyField").val();if(!st||!tt||!kf){alert("请选择源表、目标表和关键字段");return;}
+    var pairs=[];$(".sync-pair").each(function(){var s=$(this).find(".sync-src-fld").val(),t=$(this).find(".sync-tgt-fld").val();if(s&&t)pairs.push({s:s,t:t});});if(!pairs.length){alert("请添加至少一个字段对");return;}
+    if(_editingIdx>=0){
+        syncMappings[_editingIdx]={st:st,tt:tt,kf:kf,ps:pairs};
+        _editingIdx=-1;$("#syncSaveBtn").text("保存映射");$("#syncCancelEdit").hide();
+    }else{
+        syncMappings.push({st:st,tt:tt,kf:kf,ps:pairs});
+    }
+    $("#syncPairs").empty();$("#syncSrcTable").val("");$("#syncTgtTable").val("");$("#syncKeyField").html('<option value="">关键字段</option>');renderSyncList();
+    $.ajax({url:"/api/sync/mappings",type:"POST",contentType:"application/json",data:JSON.stringify({mappings:syncMappings}),async:false});$("#syncResult").html('<span class="text-success small">✅ '+(st?"已更新":"已添加")+'</span>');
+});
+$("#syncModal").on("hidden.bs.modal",function(){$.ajax({url:"/api/sync/mappings",type:"POST",contentType:"application/json",data:JSON.stringify({mappings:syncMappings}),async:false});});
+
+// ========== 新建表 ==========
+var _createTableModal=null;
+$(document).ready(function(){
+    _createTableModal=new bootstrap.Modal(document.getElementById("createTableModal"));
+});
+
+// 列模板
+var colIdx=0;
+function colRowHtml(idx){
+    return '<div class="input-group input-group-sm mb-1 col-def" data-idx="'+idx+'">'
+        +'<input type="text" class="form-control col-name" placeholder="字段名" style="width:40%">'
+        +'<select class="form-select col-type" style="width:35%">'
+        +'<option value="VARCHAR(255)">VARCHAR(255)</option>'
+        +'<option value="INT">INT</option>'
+        +'<option value="DOUBLE">DOUBLE (小数)</option>'
+        +'<option value="BIGINT">BIGINT (大整数)</option>'
+        +'<option value="DATE">DATE (日期)</option>'
+        +'<option value="TEXT">TEXT (长文本)</option>'
+        +'</select>'
+        +'<button class="btn btn-outline-danger del-col" data-idx="'+idx+'">✕</button>'
+        +'</div>';
+}
+
+function updateKeyFieldOptions(){
+    var sel=$("#newKeyField").empty().append('<option value="">— 不设置 —</option>');
+    $(".col-def").each(function(){
+        var name=$(this).find(".col-name").val().trim();
+        if(name) sel.append('<option value="'+name+'">'+name+'</option>');
+    });
+    $("#keyFieldGroup").toggle($(".col-def").length>0);
+}
+
+$("#createTableBtn").click(function(){
+    $("#newTableName").val("");
+    $("#columnDefs").empty();
+    $("#newKeyField").html('<option value="">— 不设置 —</option>');
+    $("#keyFieldGroup").hide();
+    $("#createTableResult").empty();
+    $("#confirmCreateTable").prop("disabled",false);
+    colIdx=0;
+    _createTableModal.show();
+});
+
+$("#addColumnBtn").click(function(){
+    var html=colRowHtml(colIdx);
+    $("#columnDefs").append(html);
+    colIdx++;
+    updateKeyFieldOptions();
+});
+
+$(document).on("input",".col-name",function(){
+    updateKeyFieldOptions();
+});
+
+$(document).on("click",".del-col",function(){
+    $(this).closest(".col-def").remove();
+    updateKeyFieldOptions();
+});
+
+$("#confirmCreateTable").click(function(){
+    var name=$("#newTableName").val().trim();
+    if(!name){$("#createTableResult").html('<span class="text-danger">请输入表名</span>');return;}
+    var columns=[];
+    $(".col-def").each(function(){
+        var cn=$(this).find(".col-name").val().trim();
+        var ct=$(this).find(".col-type").val();
+        if(cn)columns.push({name:cn,type:ct});
+    });
+    var key_field=$("#newKeyField").val();
+    $("#confirmCreateTable").prop("disabled",true);
+    $("#createTableResult").html('<span class="text-muted">创建中...</span>');
+    $.ajax({
+        url:"/api/tables",type:"POST",contentType:"application/json",
+        data:JSON.stringify({name:name,columns:columns,key_field:key_field}),
+        success:function(r){
+            if(r.code===0){
+                $("#createTableResult").html('<span class="text-success">✅ '+r.msg+'</span>');
+                setTimeout(function(){
+                    _createTableModal.hide();
+                    lt(name); // 刷新侧边栏并选中新表
+                },1000);
+            } else {
+                $("#createTableResult").html('<span class="text-danger">❌ '+r.msg+'</span>');
+                $("#confirmCreateTable").prop("disabled",false);
+            }
+        },
+        error:function(xhr){
+            $("#createTableResult").html('<span class="text-danger">❌ 请求失败: '+xhr.status+'</span>');
+            $("#confirmCreateTable").prop("disabled",false);
+        }
+    });
+});
+
+// ── 数据库整体备份/恢复 ──────────────────────────────
+var dbBackupModal = new bootstrap.Modal(document.getElementById("dbBackupModal"));
+$("#dbBackupBtn").click(function(){dbBackupModal.show();});
+
+// 导出数据库
+$("#exportDbBtn").click(function(){
+    var btn = $(this);
+    btn.prop("disabled",true).html("⏳ 导出中...");
+    $("#dbBackupResult").html("");
+    // 直接触发下载
+    var a = document.createElement("a");
+    a.href = "/api/database/export";
+    a.download = "";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){
+        btn.prop("disabled",false).html("⬇ 导出数据库");
+        $("#dbBackupResult").html('<span class="text-success">✅ 导出成功，请查看浏览器下载文件</span>');
+    }, 2000);
+});
+
+// 导入数据库
+$("#importDbInput").change(function(){
+    var file = this.files[0];
+    if (!file) return;
+    if (!file.name.endsWith(".json")){
+        $("#dbBackupResult").html('<span class="text-danger">❌ 请选择 .json 备份文件</span>');
+        return;
+    }
+    var fd = new FormData();
+    fd.append("file", file);
+    $("#dbBackupResult").html('<span class="text-info">⏳ 正在导入...</span>');
+    $("#importDbInput").prop("disabled", true);
+    $.ajax({
+        url: "/api/database/import",
+        type: "POST",
+        data: fd,
+        contentType: false,
+        processData: false,
+        success: function(r){
+            if (r && r.code === 0){
+                $("#dbBackupResult").html('<span class="text-success">✅ '+r.msg+'</span>');
+                lt(); // 刷新表列表
+            } else {
+                $("#dbBackupResult").html('<span class="text-danger">❌ '+(r.msg||'导入失败')+'</span>');
+            }
+        },
+        error: function(xhr){
+            $("#dbBackupResult").html('<span class="text-danger">❌ 请求失败: '+xhr.status+'</span>');
+        },
+        complete: function(){
+            $("#importDbInput").prop("disabled", false).val("");
+        }
+    });
+});
+
+$(document).ready(function(){lt();$.getJSON("/api/sync/mappings",function(r){if(r.code===0)syncMappings=r.data;});});
+</script>
+</body>
+</html>
