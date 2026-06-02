@@ -1,5 +1,5 @@
 """
-农村公路台账 — 便携体验版打包工具
+数据台账系统 — 便携体验版打包工具
 ====================================
 从当前开发环境提取必要文件并下载依赖，构建用户双击即可运行的体验版。
 
@@ -12,7 +12,7 @@ import os, sys, shutil, subprocess, json, urllib.request, zipfile, re, stat, tim
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 SERVER_DIR = os.path.join(PROJECT_DIR, "server")
-OUTPUT_DIR = os.path.join(PROJECT_DIR, "target", "road-ledger-体验版")
+OUTPUT_DIR = os.path.join(PROJECT_DIR, "target", "data-ledger-便携版")
 MYSQL_INSTALL = r"C:\Program Files\MySQL\MySQL Server 8.4"
 
 # Python 版本匹配
@@ -271,7 +271,7 @@ def step_create_launchers():
     # ── 启动脚本 ──────────────────────────────
     bat = r"""@echo off
 chcp 65001 >nul
-title 农村公路台账 - 体验版
+title 数据台账系统 - 体验版
 cd /d "%~dp0"
 setlocal enabledelayedexpansion
 
@@ -282,7 +282,7 @@ set PYTHONNOUSERSITE=1
 set PYTHONUTF8=1
 
 echo ========================================
-echo    农村公路台账 — 体验版
+echo    数据台账系统 — 体验版
 echo ========================================
 echo.
 
@@ -305,7 +305,7 @@ echo   OK
 
 ::======== 2. 创建数据库 ========
 echo [2/3] 初始化数据库...
-"%PYTHON_DIR%\python.exe" -c "import pymysql;c=pymysql.connect(host='127.0.0.1',user='root',password='',autocommit=True);c.cursor().execute('CREATE DATABASE IF NOT EXISTS road_ledger CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');c.close()" 2>nul
+"%PYTHON_DIR%\python.exe" -c "import pymysql;c=pymysql.connect(host='127.0.0.1',user='root',password='',autocommit=True);c.cursor().execute('CREATE DATABASE IF NOT EXISTS data_ledger CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');c.close()" 2>nul
 echo   OK
 
 ::======== 3. 启动 Web ========
@@ -328,8 +328,8 @@ pause >nul
     # ── 停止脚本 ──────────────────────────────
     stop = r"""@echo off
 chcp 65001 >nul
-title 农村公路台账 - 关闭
-echo 正在关闭农村公路台账...
+title 数据台账系统 - 关闭
+echo 正在关闭数据台账系统...
 :: 关闭 Flask
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr :5000 ^| findstr LISTENING') do (
     taskkill /f /pid %%a >nul 2>&1 && echo   Flask 已关闭
@@ -344,7 +344,7 @@ timeout /t 2 /nobreak >nul
         f.write(stop)
 
     # ── 使用说明 ──────────────────────────────
-    readme = """农村公路台账 — 体验版
+    readme = """数据台账系统 — 体验版
 ====================================
 
 使用方法：
@@ -437,7 +437,7 @@ def summary():
 
 def main():
     print("=" * 55)
-    print("  农村公路台账 — 便携体验版打包工具")
+    print("  数据台账系统 — 便携体验版打包工具")
     print(f"  Python {PY_VER} 嵌入版下载地址:")
     print(f"  {EMBED_URL}")
     print("=" * 55)

@@ -6,8 +6,8 @@ DB_CONFIG = {
     "port": 3306,
     "user": "root",
     "password": "",
-    "database": "road_ledger",
+    "database": "data_ledger",
     "charset": "utf8mb4"
 }
 
-FLASK_SECRET = "road-ledger-dev-2026"
+FLASK_SECRET = "data-ledger-dev-2026"

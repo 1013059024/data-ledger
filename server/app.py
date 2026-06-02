@@ -1,5 +1,5 @@
 """
-农村公路台账 — Web 表格浏览服务
+数据台账系统 — Web 表格浏览服务
 """
 import os, json, uuid, tempfile, re, datetime
 from flask import Flask, jsonify, render_template, request, send_file
@@ -10,10 +10,11 @@ app = Flask(__name__)
 app.secret_key = FLASK_SECRET
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 _upload_cache = {}
-_MAP_FILE = os.path.join(os.path.dirname(__file__), "_sync_mappings.json")
-_GROUP_FILE = os.path.join(os.path.dirname(__file__), "_table_groups.json")
-_KF_FILE = os.path.join(os.path.dirname(__file__), "_key_fields.json")
-_BACKUP_DIR = os.path.join(os.path.dirname(__file__), "_backup")
+_DATA_DIR = os.environ.get('DATA_LEDGER_DATA') or os.path.dirname(__file__)
+_MAP_FILE = os.path.join(_DATA_DIR, "_sync_mappings.json")
+_GROUP_FILE = os.path.join(_DATA_DIR, "_table_groups.json")
+_KF_FILE = os.path.join(_DATA_DIR, "_key_fields.json")
+_BACKUP_DIR = os.path.join(_DATA_DIR, "_backup")
 _DEL_TOKEN = os.urandom(8).hex()  # 每次启动随机生成，只有页面知道
 
 
@@ -248,17 +249,77 @@ def api_rename_column(table_name):
 
 @app.route("/api/table/<table_name>/dedup", methods=["POST"])
 def api_dedup(table_name):
-    """对关键字段查重，自动删除重复记录（保留ID最小的）"""
+    """对关键字段查重
+    POST body: {"preview": true}  → 预览重复记录（不删除）
+    POST body: {}                 → 执行删除（保留每组ID最小的）
+    """
     kf = _load_kf().get(table_name, "")
     if not kf:
         return jsonify({"code": 1, "msg": "请先设置关键字段"})
     schema = get_schema(table_name)
-    if kf not in [s["field"] for s in schema]:
+    all_fields = [s["field"] for s in schema]
+    if kf not in all_fields:
         return jsonify({"code": 1, "msg": f"字段 `{kf}` 已不存在"})
     pk = get_pk_column(table_name) or "id"
+    has_del = "_deleted" in all_fields
+    del_cond = "AND IFNULL(`_deleted`,0)!=1" if has_del else ""
+    d = request.get_json(silent=True) or {}
+    preview = d.get("preview", False)
     try:
-        deleted = execute(f"DELETE t1 FROM `{table_name}` t1 INNER JOIN `{table_name}` t2 WHERE t1.`{kf}`=t2.`{kf}` AND t1.`{pk}`>t2.`{pk}`")
-        return jsonify({"code": 0, "msg": f"已删除 {deleted} 条重复记录"})
+        if preview:
+            # ── 预览模式：查出重复记录，不删 ──
+            rows = query(f"SELECT * FROM `{table_name}` WHERE 1=1 {del_cond} ORDER BY `{kf}`,`{pk}`")
+            # 分组找出重复的
+            groups = []  # [{key_value, records: [{id, fields}], keep_id, del_ids}]
+            i = 0
+            while i < len(rows):
+                cur_key = rows[i].get(kf)
+                if cur_key is None:
+                    i += 1
+                    continue
+                group = [rows[i]]
+                i += 1
+                while i < len(rows) and rows[i].get(kf) == cur_key:
+                    group.append(rows[i])
+                    i += 1
+                if len(group) > 1:
+                    # 保留ID最小的，其余标记为删除
+                    group.sort(key=lambda r: r[pk])
+                    keep = group[0]
+                    to_del = group[1:]
+                    recs = []
+                    for r in group:
+                        fv = {}
+                        for f in all_fields:
+                            if f in (pk, "_deleted"):
+                                continue
+                            v = r.get(f)
+                            if isinstance(v, (datetime.date, datetime.datetime)):
+                                v = v.isoformat()
+                            fv[f] = v
+                        recs.append({
+                            "id": r[pk],
+                            "is_keep": r[pk] == keep[pk],
+                            "fields": fv
+                        })
+                    groups.append({
+                        "key_value": str(cur_key) if cur_key is not None else "",
+                        "records": recs,
+                        "keep_id": keep[pk],
+                        "del_ids": [r[pk] for r in to_del]
+                    })
+            total_duplicates = sum(len(g["del_ids"]) for g in groups)
+            return jsonify({"code": 0, "data": {
+                "groups": len(groups),
+                "records": total_duplicates,
+                "items": groups,
+                "key_field": kf,
+                "all_fields": [f for f in all_fields if f not in (pk, "_deleted")]
+            }})
+        else:
+            # ── 执行删除 ──
+            deleted = execute(f"DELETE t1 FROM `{table_name}` t1 INNER JOIN `{table_name}` t2 WHERE t1.`{kf}`=t2.`{kf}` AND t1.`{pk}`>t2.`{pk}`")
+            return jsonify({"code": 0, "msg": f"已删除 {deleted} 条重复记录"})
     except Exception as e:
         return jsonify({"code": 1, "msg": f"去重失败: {e}"})
 
@@ -464,7 +525,7 @@ def api_un_table_delete_rows(table_name):
 
 
 # ── 列隐藏 ──────────────────────────────────────────
-_HIDDEN_COL_FILE = os.path.join(os.path.dirname(__file__), "_hidden_columns.json")
+_HIDDEN_COL_FILE = os.path.join(_DATA_DIR, "_hidden_columns.json")
 def _load_hidden_cols():
     try:
         if os.path.exists(_HIDDEN_COL_FILE):
@@ -1549,7 +1610,7 @@ def api_db_export():
         data = {
             "version": 2,
             "exported_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "database": "road_ledger",
+            "database": "data_ledger",
             "tables": export_all_tables(),
             "configs": {
                 "key_fields": _load_kf(),
@@ -1561,7 +1622,7 @@ def api_db_export():
         buf = BytesIO()
         buf.write(json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8"))
         buf.seek(0)
-        filename = f"农村公路台账_备份_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        filename = f"数据台账系统_备份_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         return send_file(buf, download_name=filename, as_attachment=True,
                         mimetype="application/json")
     except Exception as e:
@@ -1840,5 +1901,5 @@ def _safe_tablename(name):
 
 
 if __name__ == "__main__":
-    print("="*50); print("农村公路台账"); print(f"  地址: http://127.0.0.1:5000"); print("="*50)
+    print("="*50); print("数据台账系统"); print(f"  地址: http://127.0.0.1:5000"); print("="*50)
     app.run(host="0.0.0.0", port=5000, debug=True)

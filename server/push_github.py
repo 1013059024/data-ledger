@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Push road-ledger to GitHub as a new Release (v2) preserving history"""
+"""Push data-ledger to GitHub as a new Release (v3) preserving history"""
 import os, sys, json, base64, urllib.request, ssl
 from datetime import datetime
 
-REPO_DIR = r"E:\reasonix-data\projects\road-ledger"
+REPO_DIR = r"E:\reasonix-data\projects\data-ledger"
 OWNER = "1013059024"
-REPO = "road-ledger"
+REPO = "data-ledger"
 BRANCH = "main"
-TAG = "v2"
+TAG = "v3"
 TOKEN = "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"
 ctx = ssl._create_unverified_context()
 
@@ -17,7 +17,7 @@ def api(method, path, data=None, accept=None):
     url = f"https://api.github.com/repos/{OWNER}/{REPO}{path}"
     headers = {
         'Authorization': f'token {TOKEN}',
-        'User-Agent': 'road-ledger-sync',
+        'User-Agent': 'data-ledger-sync',
         'Content-Type': 'application/json',
     }
     headers['Accept'] = accept or 'application/vnd.github.v3+json'
@@ -49,7 +49,7 @@ def main():
     # ── 2. 遍历本地文件（排除压缩包/数据/缓存）──
     IGNORE_DIRS = {'.git', '__pycache__', 'node_modules', '.venv', 'venv',
                    'dist', 'build', '.idea', '.vscode', 'mysql-data',
-                   '_tmp', '_backup'}
+                   '_tmp', '_backup', 'data-ledger-portable', 'target', 'data'}
     tree_items = []
     for root, dirs, files in os.walk(REPO_DIR):
         rel_root = os.path.relpath(root, REPO_DIR)
@@ -104,7 +104,7 @@ def main():
     print(f"  树: {new_tree['sha'][:10]}... ({len(new_tree_items)} 项)")
 
     # ── 4. 创建提交 ──
-    commit_msg = (f"v2 更新使用手册 + 复制粘贴/锚点展开/列模式等新功能 "
+    commit_msg = (f"v3 更名为数据台账系统(data-ledger) "
                   f"({datetime.now().strftime('%Y-%m-%d %H:%M')})")
     new_commit = api('POST', '/git/commits', {
         'message': commit_msg,
@@ -151,17 +151,15 @@ def main():
     try:
         release = api('POST', '/releases', {
             'tag_name': TAG,
-            'name': f'v2 - 新版使用手册 + 复制粘贴增强',
+            'name': f'v3 - 更名为数据台账系统',
             'body': (
                 '## ✨ 新功能\n\n'
-                '- **Excel 风格粘贴**：选单格作锚点，自动向右/下展开\n'
-                '- **右键粘贴**：行菜单合并复制/粘贴/清除\n'
-                '- **列优先模式**：列头选中 → 粘贴走全列匹配\n'
-                '- **清除内容修复**：单元格选中优先于列残留\n\n'
-                '## 📄 文档\n\n'
-                '- 重写 `使用手册.md`（15 章完整功能说明）\n'
-                '- 重写 `README.md`\n'
-                '- 删除过时的 `PROJECT_MAP.md`\n'
+                '- **去重预览**：去重前弹窗显示每条重复记录的完整字段信息\n'
+                '- **单文件 EXE**：PyInstaller 打包为 农村公路台账.exe（87MB）\n\n'
+                '## 🔄 更名\n\n'
+                '- **农村公路台账 → 数据台账系统**\n'
+                '- **road-ledger → data-ledger**\n'
+                '- **GitHub 仓库同步更名**\n'
             ),
             'draft': False,
             'prerelease': False

@@ -16,7 +16,7 @@ SERVER_DIR = os.path.join(PROJECT_DIR, "server")
 DATA_DIR = os.path.join(PROJECT_DIR, "mysql-data")
 MYSQLD = r"C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe"
 MYSQL = r"C:\Program Files\MySQL\MySQL Server 8.4\bin\mysql.exe"
-DB_NAME = "road_ledger"
+DB_NAME = "data_ledger"
 PORT = 3306
 FLASK_PORT = 5000
 
@@ -107,7 +107,7 @@ def start_mysql():
 
 
 def ensure_database():
-    """Ensure road_ledger database exists"""
+    """Ensure data_ledger database exists"""
     e(">> Checking database...")
     ret = subprocess.run(
         [MYSQL, "-u", "root", "-e",

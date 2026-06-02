@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>农村公路台账</title>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>数据台账系统</title>
 <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
 <meta name="del-token" content="{{ del_token }}">
 <link href="/static/css/style.css" rel="stylesheet">
@@ -19,7 +19,7 @@
 <body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
 <div class="container-fluid">
-<a class="navbar-brand" href="/">🛣️ 农村公路台账</a>
+<a class="navbar-brand" href="/">🛣️ 数据台账系统</a>
 <span class="navbar-text text-white-50 small"><span id="tableCount" class="badge bg-light text-primary">0 张表</span> <span id="saveStatus" class="badge bg-success ms-1" style="cursor:default" title="数据已保存到数据库">✅ 已保存</span></span>
 <div class="ms-auto d-flex gap-2">
 <button class="btn btn-outline-light btn-sm" id="syncBtn">🔗 映射</button>
@@ -239,6 +239,7 @@
 <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
 <script>
 let ct="",cp=1,sid="",ah=[],pd=[],ls=false,ftypes={},_importFilename="",_recordChanges={},_currentKf="",_saveTimer=null,
+    _scrollToKeyField=null,_scrollToKeyValue=null,
     _delToken=$("meta[name='del-token']").attr("content")||""; const PP=50;
 
 // ── 保存状态指示器 ──────────────────────────────────
@@ -580,7 +581,7 @@ function render(d){
     var h=$("#tableHead").empty(),tr=$("<tr><th>序号</th></tr>");
     if(_showAllRows)tr.append("<th style='width:80px'>状态</th>");
     d.schema.forEach(function(c){if(c.field===d.pk)return;if(c.field==='_deleted')return;var fld=c.field;tr.append("<th class='col-head' data-field='"+fld+"' data-type='"+c.type+"' style='cursor:pointer'><span class='col-head-name'>"+fld+"</span></th>");});h.append(tr);
-    var b=$("#tableBody").empty(),f=d.schema.map(function(c){return c.field}),pk=d.pk||"id";
+    var b=$("#tableBody").empty(),f=d.schema.map(function(c){return c.field}),pk=(d.pk&&d.pk!="rowid")?d.pk:"id";
     if(!d.rows.length){b.append('<tr><td colspan="99" class="text-center text-muted">暂无</td></tr>');return;}
     d.rows.forEach(function(row,i){
         var rowDel=row._deleted||0;
@@ -620,6 +621,7 @@ function render(d){
         var cnt=d.rows.length;
         $("#showAllCount").text(cnt);
     }
+    $(document).trigger("tableRendered");
 }
 function isFloat(t){return t.indexOf("double")>=0||t.indexOf("float")>=0||t.indexOf("decimal")>=0||t.indexOf("numeric")>=0;}
 var st=null;
@@ -743,17 +745,71 @@ $("#exportBtn").click(function(){if(!ct){alert("请先选择表");return;}var fi
 $("#refreshBtn").click(function(){if(ct)fp(ct,cp);});
 $("#dedupBtn").click(function(){
     if(!ct){showToast("⚠️ 请先选择一张表","warn");return;}
-    if(!confirm("确定对当前表的关键字段查重并删除重复记录？\n此操作不可撤销！"))return;
+    // 创建去重预览弹窗（只创建一次）
+    if(!$("#dedupModal").length){
+        $("body").append('<div class="modal fade" id="dedupModal"><div class="modal-dialog modal-xl"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">🧹 去重预览</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body" id="dedupBody" style="max-height:70vh;overflow-y:auto"></div><div class="modal-footer" id="dedupFooter"></div></div></div></div>');
+    }
+    var $dedupBody=$("#dedupBody"),$dedupFooter=$("#dedupFooter");
     var $btn=$(this);$btn.prop("disabled",true);
+    $dedupBody.html('<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">正在扫描重复记录...</p></div>');
+    $dedupFooter.empty();
+    var dm=new bootstrap.Modal(document.getElementById("dedupModal"));dm.show();
     $.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/dedup",type:"POST",
+        contentType:"application/json",data:JSON.stringify({preview:true}),
         success:function(r){
-            if(r.code===0){showToast("✅ "+r.msg,"ok");fp(ct,cp);}
-            else showToast("❌ "+r.msg,"err");
+            if(r.code===0&&r.data){
+                var g=r.data.groups,items=r.data.items,kf=r.data.key_field,afs=r.data.all_fields;
+                if(!g){dm.hide();showToast("✅ 无重复记录","ok");$btn.prop("disabled",false);return;}
+                var totalDel=0;
+                items.forEach(function(grp){totalDel+=grp.del_ids.length;});
+                // 统计每组删几条，构建HTML
+                var h='<div class="alert alert-warning py-2 mb-2"><strong>共 '+g+' 组重复</strong>，将删除 <strong>'+totalDel+'</strong> 条冗余记录（每组保留ID最小的1条）</div>';
+                h+='<p class="text-muted small mb-2">🟢 绿色 = 将保留　🔴 红色 = 将删除　关键字段: <strong>'+kf+'</strong></p>';
+                items.forEach(function(grp,gi){
+                    h+='<div class="card mb-2"><div class="card-header py-1 px-2 d-flex justify-content-between">';
+                    h+='<span><strong>🔑 '+escHtml(grp.key_value)+'</strong>（'+grp.records.length+' 条，删 '+grp.del_ids.length+' 条）</span>';
+                    h+='<span class="text-muted small">ID: '+grp.keep_id+' 保留</span></div>';
+                    h+='<div class="card-body p-0"><div style="overflow-x:auto"><table class="table table-sm table-bordered mb-0" style="min-width:'+(afs.length*120+60)+'px">';
+                    h+='<thead><tr><th style="width:40px">#</th><th style="width:60px">状态</th><th style="width:60px">ID</th>';
+                    afs.forEach(function(f){h+='<th>'+(f===kf?'🔑 '+escHtml(f):escHtml(f))+'</th>';});
+                    h+='</tr></thead><tbody>';
+                    grp.records.forEach(function(rec,ri){
+                        var cls=rec.is_keep?'table-success':'table-danger';
+                        var label=rec.is_keep?'🟢 保留':'🔴 删除';
+                        h+='<tr class="'+cls+'"><td>'+(ri+1)+'</td><td>'+label+'</td><td>'+rec.id+'</td>';
+                        afs.forEach(function(f){
+                            var v=rec.fields[f];
+                            var sv=v!==null&&v!==undefined?escHtml(String(v)):'<span class="text-muted">—</span>';
+                            h+='<td'+(f===kf?' style="font-weight:bold"':'')+'>'+sv+'</td>';
+                        });
+                        h+='</tr>';
+                    });
+                    h+='</tbody></table></div></div></div>';
+                });
+                h+='<p class="text-muted small mt-2 mb-0">⚠️ 删除不可撤销，请仔细核对每条记录</p>';
+                $dedupBody.html(h);
+                $dedupFooter.html('<button class="btn btn-danger" id="dedupConfirmBtn">🗑️ 确认删除 '+totalDel+' 条</button><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>');
+            }else{dm.hide();showToast("❌ 预览失败: "+(r.msg||"未知错误"),"err");$btn.prop("disabled",false);}
         },
-        error:function(){showToast("❌ 去重请求失败","err");},
+        error:function(){dm.hide();showToast("❌ 预览请求失败","err");$btn.prop("disabled",false);},
         complete:function(){$btn.prop("disabled",false);}
     });
+    $(document).off("click","#dedupConfirmBtn").on("click","#dedupConfirmBtn",function(){
+        dm.hide();
+        $.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/dedup",type:"POST",
+            contentType:"application/json",data:JSON.stringify({}),
+            success:function(r2){
+                if(r2.code===0){showToast("✅ "+r2.msg,"ok");fp(ct,cp);}
+                else showToast("❌ "+r2.msg,"err");
+            },
+            error:function(){showToast("❌ 去重请求失败","err");}
+        });
+    });
 });
+
+function escHtml(s){
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
 
 // ── 列功能菜单（手动控制，不与 Bootstrap 冲突） ──
 function colFuncToggle(){
@@ -1706,6 +1762,9 @@ $(document).on("mousedown","td.editable",function(e){
         _dragSel.active=false;
         // 保护：阻止 click 事件清空选中的单元格
         _dragSel._pt=true;
+        // 清除列头选中，防止 colHeadGlobalUp 中的 mirrorColSelection() 清除拖拽选中
+        _colSel={first:null,cols:[]};
+        $("#tableHead th.col-head").removeClass("selected-header");
         setTimeout(function(){_dragSel._pt=false;},300);
         return;
     }
@@ -2163,7 +2222,7 @@ $("#syncVerifyBtn").click(function(){var $btn=$(this);$btn.prop("disabled",true)
             allSrc+=data.total_src;allTgt+=data.total_tgt;allMatched+=data.matched;
             allSrcOnly+=data.src_only;allTgtOnly+=data.tgt_only;
             if(data.errors.length)allErrs=allErrs.concat(data.errors.map(function(e){
-                e._mp=t.st+' ↔ '+t.tt;return e;
+                e._mp=t.st+' ↔ '+t.tt;e._st=t.st;e._tt=t.tt;return e;
             }));
             if(done===total){$btn.prop("disabled",false);
                 var sum='共 '+tasks.length+' 组映射，源表 '+allSrc+' 条，目标表 '+allTgt+' 条';
@@ -2172,11 +2231,44 @@ $("#syncVerifyBtn").click(function(){var $btn=$(this);$btn.prop("disabled",true)
                 if(!allErrs.length){$("#syncVerifySummary").html(sum+'，✅ 全部一致');$("#syncVerifyResult").html('<div class="alert alert-success py-1 mb-0">✅ 所有映射字段数据一致</div>');return;}
                 $("#syncVerifySummary").html(sum+'，⚠️ <span class="text-danger fw-bold">'+allErrs.length+' 处不一致</span>');
                 var tbl='<table class="table table-sm table-bordered mt-1 mb-0" style="font-size:.85em"><thead><tr><th>映射</th><th>关键值</th><th>字段</th><th>源值</th><th>目标值</th></tr></thead><tbody>';
-                allErrs.forEach(function(e){tbl+='<tr><td class="small text-muted">'+e._mp+'</td><td>'+e.key+'</td><td>'+e.field_src+' ↔ '+e.field_tgt+'</td><td class="text-danger">'+e.val_src+'</td><td class="text-warning">'+e.val_tgt+'</td></tr>';});
-                tbl+='</tbody></table>';$("#syncVerifyResult").html('<div class="alert alert-warning py-1 mb-0">⚠️ 发现 <strong>'+allErrs.length+'</strong> 处不一致：</div>'+tbl);
+                allErrs.forEach(function(e){
+                    var safeKey=encodeURIComponent(e.key);
+                    tbl+='<tr><td class="small text-muted">'+e._mp+'</td><td>'+e.key+'</td><td>'+e.field_src+' ↔ '+e.field_tgt+'</td>'
+                        +'<td class="text-danger" style="cursor:pointer;text-decoration:underline dotted" data-table="'+e._st+'" data-field="'+e.field_src+'" data-key="'+safeKey+'">'+e.val_src+'</td>'
+                        +'<td class="text-warning" style="cursor:pointer;text-decoration:underline dotted" data-table="'+e._tt+'" data-field="'+e.field_tgt+'" data-key="'+safeKey+'">'+e.val_tgt+'</td></tr>';
+                });
+                tbl+='</tbody></table>';$("#syncVerifyResult").html('<div class="alert alert-warning py-1 mb-0">⚠️ 发现 <strong>'+allErrs.length+'</strong> 处不一致，点击值跳转到目标表：</div>'+tbl);
+
             }
         });
     });
+});
+// 点击核实结果中的值 → 跳转到对应表记录
+$(document).on("click","#syncVerifyResult td[data-table]",function(){
+    var tbl=$(this).data("table"),field=$(this).data("field"),key=decodeURIComponent($(this).data("key"));
+    if(!tbl||!field||!key)return;
+    var syncModal=bootstrap.Modal.getInstance(document.getElementById("syncModal"));
+    if(syncModal)syncModal.hide();
+    _scrollToKeyField=field;
+    _scrollToKeyValue=key;
+    $("#searchInput").val(key);
+    loadTable(tbl);
+});
+// 渲染后滚动到目标记录
+$(document).on("tableRendered",function(){
+    if(!_scrollToKeyField||!_scrollToKeyValue)return;
+    var fld=_scrollToKeyField,val=_scrollToKeyValue;
+    _scrollToKeyField=null;_scrollToKeyValue=null;
+    setTimeout(function(){
+        var $td=$("#tableBody td[data-field='"+fld+"']").filter(function(){
+            return $(this).text().trim()===val;
+        }).first();
+        if($td.length){
+            $td.addClass("bg-warning bg-opacity-25");
+            $td[0].scrollIntoView({behavior:"smooth",block:"center"});
+            setTimeout(function(){$td.removeClass("bg-warning bg-opacity-25");},3000);
+        }
+    },300);
 });
 $("#syncSaveBtn").click(function(){var st=$("#syncSrcTable").val(),tt=$("#syncTgtTable").val(),kf=$("#syncKeyField").val();if(!st||!tt||!kf){alert("请选择源表、目标表和关键字段");return;}
     var pairs=[];$(".sync-pair").each(function(){var s=$(this).find(".sync-src-fld").val(),t=$(this).find(".sync-tgt-fld").val();if(s&&t)pairs.push({s:s,t:t});});if(!pairs.length){alert("请添加至少一个字段对");return;}

@@ -1,42 +1,44 @@
-# 🛣️ 农村公路台账系统
+# 🛣️ 数据台账系统系统
 
-农村公路建设项目台账管理工具，支持多表管理、字段映射同步、汇总统计、Excel 导入导出。
+农村公路建设项目台账管理工具。
 
-## 快速启动
+> 详细操作说明见 **[使用手册.md](使用手册.md)**
 
-```bash
-python start.py
-```
-
-浏览器打开 `http://127.0.0.1:5000`
-
-## 技术栈
-
-- 后端：Python Flask + PyMySQL
-- 前端：jQuery + Bootstrap 5
-- 数据库：MySQL 8.4（便携版，项目内 data 目录）
-
-## 详细文档
-
-详见 [`使用手册.md`](使用手册.md)。
+---
 
 ## 目录结构
 
 ```
-server/         后端 + 前端单页应用
-├── app.py       Flask 路由与业务逻辑
-├── db.py        数据库操作层
-├── config.py    MySQL 连接配置
-├── templates/index.html   全部前端界面
-├── _backup/     删表自动备份
-├── _sync_mappings.json   映射配置
-├── _key_fields.json      关键字段配置
-└── _hidden_columns.json  隐藏列配置
-start.py        一键启动脚本
+E:\reasonix-data\projects\data-ledger\
+├── server/              ← 源码
+│   ├── app.py            Flask 路由与业务逻辑
+│   ├── db.py             数据库操作层
+│   ├── config.py         配置
+│   └── templates/        前端界面
+├── mysql-data/           ← MySQL 数据目录
+├── _备份_源码勿删!/       ← 源码备份（火绒保护）
+├── portable_packages/    ← 便携包（linux / win 两种）
+├── build_portable.py     ← 便携版打包脚本
+├── start.py / start.bat ← 启动脚本
+├── 使用手册.md            ← 操作指南
+└── 使用手册.md           ← 本文档
 ```
 
-## 系统要求
+## 快速启动
 
-- Python ≥ 3.10
-- MySQL 8.4（或兼容版本）
-- Windows（启动脚本基于 Windows 环境）
+```bash
+pip install flask pymysql openpyxl xlrd
+python start.py
+```
+
+浏览器打开 http://127.0.0.1:5000
+
+## 便携版打包
+
+```bash
+python build_portable.py
+```
+
+输出在 `target/data-ledger-便携版/`
+
+> 需要本机安装 MySQL 8.4 + 有网络
