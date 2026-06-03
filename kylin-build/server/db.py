@@ -17,6 +17,9 @@ def _convert_sql(sql):
     sql = re.sub(r'`([^`]+)`', r'"\1"', sql)
     # 3. 清除 MySQL 专属表选项（备份 JSON 中的 CREATE TABLE 包含 ENGINE=InnoDB 等）
     sql = re.sub(r'\s+ENGINE\s*=\s*\w+(?:\s+DEFAULT\s+(?:CHARSET|COLLATE)\s*=\s*\w+)*', '', sql, flags=re.IGNORECASE)
+    # 4. AUTO_INCREMENT → AUTOINCREMENT（旧版 MySQL 备份兼容）
+    sql = re.sub(r'"id"\s+INT\s+NOT\s+NULL\s+AUTO_INCREMENT\s*,', '"id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,', sql, flags=re.IGNORECASE)
+    sql = re.sub(r'\s*,\s*PRIMARY\s+KEY\s*\(\s*"id"\s*\)', '', sql, flags=re.IGNORECASE)
     return sql
 
 
@@ -362,7 +365,9 @@ def create_table_from_data(headers, rows, tn):
         conn.close()
 
 
-# ── 数据库整体导出/导入 ─────────────────────────────
+# ── 数据库整体导出/导入（跨平台兼容） ───────────────
+# 备份 JSON 存储 schema（字段列表）而非原生 SQL，
+# 确保 MySQL 版导出的备份可在 SQLite 版恢复，反之亦然。
 
 def get_create_sql(tn):
     r = query_one("SELECT \"sql\" FROM \"sqlite_master\" WHERE \"type\"='table' AND \"name\"=?", (tn,))
@@ -370,12 +375,13 @@ def get_create_sql(tn):
 
 
 def export_all_tables():
+    """导出所有表的结构（schema）+ 数据，不依赖原生 SQL"""
     tables = get_tables()
     result = []
     for t in tables:
         tn = t["name"]
-        create_sql = get_create_sql(tn)
-        if not create_sql: continue
+        schema = get_schema(tn)
+        if not schema: continue
         pk = get_pk_column(tn) or "id"
         rows = query(f"SELECT * FROM \"{tn}\" ORDER BY \"{pk}\"")
         serialized = []
@@ -391,22 +397,43 @@ def export_all_tables():
                 else:
                     sr[k] = str(v)
             serialized.append(sr)
-        result.append({"name": tn, "create_sql": create_sql, "rows": serialized})
+        # 存储 schema（字段列表）代替原生 SQL，实现跨数据库迁移
+        result.append({"name": tn, "schema": schema, "rows": serialized})
     return result
 
 
 def import_tables(table_list, drop_existing=True):
+    """从备份恢复表（支持跨数据库 MySQL↔SQLite 迁移）"""
     ok = 0; fail = 0; errors = []
     for td in table_list:
-        tn = td["name"]; create_sql = td["create_sql"]; rows = td.get("rows", [])
+        tn = td["name"]; rows = td.get("rows", [])
         try:
             if drop_existing:
                 existing = get_schema(tn)
                 if existing: execute(f"DROP TABLE IF EXISTS \"{tn}\"")
-            execute(create_sql)
-            if rows:
+            
+            # 优先使用 schema（字段列表），兼容旧版 create_sql
+            schema = td.get("schema", [])
+            if not schema and td.get("create_sql"):
+                # 旧版备份：通过 get_schema 获取字段信息（转换后再读）
+                execute(td["create_sql"])
                 schema = get_schema(tn)
-                fields = [s["field"] for s in schema if s["field"] != "id"]
+            if not schema:
+                fail += 1; errors.append(f"{tn}: 缺少字段定义"); continue
+            
+            col_defs = []
+            for col in schema:
+                fn = col["field"]
+                if fn == "id": continue
+                ft = col["type"]
+                col_defs.append(f"\"{fn}\" {ft}")
+            cols_sql = ", " + ", ".join(col_defs) if col_defs else ""
+            execute(f'CREATE TABLE "{tn}" ("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT{cols_sql})')
+            
+            # 插入数据
+            if rows:
+                fresh_schema = get_schema(tn)
+                fields = [s["field"] for s in fresh_schema if s["field"] != "id"]
                 if fields:
                     ph = ", ".join(["?"] * len(fields))
                     fl = ", ".join([f"\"{f}\"" for f in fields])
