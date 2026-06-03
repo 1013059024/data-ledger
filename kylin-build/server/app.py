@@ -1861,13 +1861,20 @@ def _parse_excel_raw(path):
             pairs = [(n, r) for n, r in zip(ns, ra) if _has_data(r)]
             return [p[0] for p in pairs], [p[1] for p in pairs]
     else:
-        from openpyxl import load_workbook
-        wb = load_workbook(filename=path, read_only=True); ns = wb.sheetnames
-        ra = [list(ws.iter_rows(values_only=True)) for ws in [wb[n] for n in ns]]
-        wb.close()
-        ra2 = [list(r) for r in ra]
-        pairs = [(n, r) for n, r in zip(ns, ra2) if _has_data(r)]
-        return [p[0] for p in pairs], [p[1] for p in pairs]
+        try:
+            from openpyxl import load_workbook
+            wb = load_workbook(filename=path, read_only=True); ns = wb.sheetnames
+            ra = [list(ws.iter_rows(values_only=True)) for ws in [wb[n] for n in ns]]
+            wb.close()
+            ra2 = [list(r) for r in ra]
+            pairs = [(n, r) for n, r in zip(ns, ra2) if _has_data(r)]
+            return [p[0] for p in pairs], [p[1] for p in pairs]
+        except Exception:
+            import xlrd
+            wb = xlrd.open_workbook(path); ns = wb.sheet_names()
+            ra = [[[ws.cell_value(r,c) for c in range(ws.ncols)] for r in range(ws.nrows)] for ws in [wb.sheet_by_name(n) for n in ns]]
+            pairs = [(n, r) for n, r in zip(ns, ra) if _has_data(r)]
+            return [p[0] for p in pairs], [p[1] for p in pairs]
 
 
 def _serialize_rows(rows):
