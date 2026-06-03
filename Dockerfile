@@ -8,6 +8,12 @@ WORKDIR /build
 # 注意：编译 kylin-build/server/（SQLite 版），不是 server/（MySQL 版）
 COPY kylin-build/server/ ./server/
 
+# 下载 Noto Emoji 字体并放入静态目录，解决麒麟系统 emoji 方块问题
+RUN mkdir -p server/static/fonts && \
+    curl -fsSL -o server/static/fonts/NotoEmoji-Regular.ttf \
+    https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoEmoji-Regular.ttf && \
+    echo "Emoji font downloaded OK"
+
 # 用 conda 装 Python 3.9（预编译，带 --enable-shared）
 # SQLite 版无需 pymysql，Python 标准库自带 sqlite3
 RUN curl -fsSL -o /tmp/miniforge.sh \
