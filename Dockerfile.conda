@@ -1,4 +1,4 @@
-﻿# 数据台账系统 — conda-pack 构建
+# 数据台账系统 — conda-pack 构建
 # 麒麟上解压 tar.gz → bash start.sh 即用（无需联网）
 
 FROM --platform=$TARGETPLATFORM quay.io/pypa/manylinux2014_aarch64 AS builder
@@ -26,8 +26,8 @@ RUN mkdir -p /dist/app && \
     cp -r server/ /dist/app/ && \
     cp /tmp/py.tar.gz /dist/app/
 
-# 创建启动脚本（设置编码避免中文乱码）
-RUN printf '#!/bin/bash\nDIR="$(cd "$(dirname "$0")" && pwd)"\nexport LANG=zh_CN.UTF-8\ntar xzf "$DIR/py.tar.gz" -C "$DIR" 2>/dev/null || true\n"$DIR/py/bin/python" "$DIR/app/app.py"\n' > /dist/app/start.sh && \
+# 创建启动脚本（conda-pack 解压后 python 在 bin/ 目录）
+RUN printf '#!/bin/bash\nDIR="$(cd "$(dirname "$0")" && pwd)"\nexport LANG=zh_CN.UTF-8\nif [ ! -f "$DIR/bin/python" ]; then tar xzf "$DIR/py.tar.gz" -C "$DIR" 2>/dev/null || true; fi\n"$DIR/bin/python" "$DIR/app/app.py"\n' > /dist/app/start.sh && \
     chmod +x /dist/app/start.sh
 
 FROM scratch AS export
