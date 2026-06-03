@@ -1,0 +1,41 @@
+# 数据台账系统 — conda-pack 构建
+# 输出：data-ledger-kylin.tar.gz（麒麟解压即用）
+
+FROM --platform=$TARGETPLATFORM quay.io/pypa/manylinux2014_aarch64 AS builder
+
+WORKDIR /build
+
+# 复制源码
+COPY kylin-build/server/ ./server/
+
+# 安装 conda-pack
+RUN curl -fsSL -o /tmp/miniforge.sh \
+    https://github.com/conda-forge/miniforge/releases/download/24.11.3-0/Miniforge3-Linux-aarch64.sh \
+    && bash /tmp/miniforge.sh -b -p /opt/conda \
+    && rm /tmp/miniforge.sh
+
+ENV PATH=/opt/conda/bin:$PATH
+
+# 创建 Python 环境和安装依赖
+RUN conda create -y -n data-ledger python=3.9 pip && \
+    conda run -n data-ledger pip install --no-cache-dir \
+        flask>=3.0 \
+        openpyxl>=3.1 \
+        xlrd>=2.0 && \
+    conda install -y -n data-ledger conda-pack && \
+    conda run -n data-ledger conda-pack -p /opt/conda/envs/data-ledger -o /tmp/data-ledger-env.tar.gz
+
+# 打包最终产物
+RUN mkdir -p /dist/data-ledger && \
+    cp -r server/ /dist/data-ledger/ && \
+    cp /tmp/data-ledger-env.tar.gz /dist/data-ledger/
+
+# 创建启动脚本
+RUN echo '#!/bin/bash' > /dist/data-ledger/start.sh && \
+    echo 'DIR="$(cd "$(dirname "$0")" && pwd)"' >> /dist/data-ledger/start.sh && \
+    echo 'tar xzf "$DIR/data-ledger-env.tar.gz" -C "$DIR" 2>/dev/null || true' >> /dist/data-ledger/start.sh && \
+    echo '"$DIR/data-ledger-env/bin/python" "$DIR/server/app.py"' >> /dist/data-ledger/start.sh && \
+    chmod +x /dist/data-ledger/start.sh
+
+FROM scratch AS export
+COPY --from=builder /dist/data-ledger/ /
