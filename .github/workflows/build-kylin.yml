@@ -1,4 +1,4 @@
-name: 麒麟版构建
+name: 麒麟版构建 - conda-pack
 
 on:
   push:
@@ -11,45 +11,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 设置 QEMU 多架构支持
+      - name: 设置 QEMU
         uses: docker/setup-qemu-action@v3
 
       - name: 设置 Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          # 使用 buildx 的本地缓存驱动来加速
-          buildkitd-flags: --debug
-          driver-opts: image=moby/buildkit:latest
 
-      # 缓存 Docker 构建层（大幅加速 conda 下载 + pip install）
-      - name: 缓存 Docker 构建层
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ hashFiles('Dockerfile') }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-
-      - name: 构建 aarch64 单文件可执行文件
+      - name: 用 conda-pack 打包 Python 运行环境
         uses: docker/build-push-action@v6
         with:
           platforms: linux/arm64
           outputs: type=local,dest=./output
-          # 使用本地缓存驱动（比 gha 缓存更快更稳定）
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-          file: Dockerfile
-          # 构建参数 — 用于缓存键值
-          build-args: BUILDKIT_INLINE_CACHE=1
-
-      # 移动缓存（避免缓存膨胀）
-      - name: 移动缓存
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+          file: Dockerfile.conda
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
           name: 数据台账系统-麒麟版
-          path: ./output/dist/
+          path: ./output/
