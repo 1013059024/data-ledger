@@ -1,0 +1,30 @@
+name: 编译 Reasonix for 麒麟 (ARM64)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出 Reasonix 源码
+        uses: actions/checkout@v4
+        with:
+          repository: esengine/reasonix
+          ref: main
+
+      - name: 设置 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: 编译 ARM64 版本
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o reasonix-kylin ./cmd/reasonix
+          ls -lh reasonix-kylin
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: reasonix-kylin-arm64
+          path: reasonix-kylin
