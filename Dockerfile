@@ -21,12 +21,11 @@ RUN curl -fsSL -o /tmp/miniforge.sh \
         openpyxl>=3.1 \
         xlrd>=2.0
 
-# PyInstaller 打包为单文件
-# 无需 --hidden-import pymysql（SQLite 是 Python 标准库）
+# PyInstaller 打包为单文件（英文名，麒麟终端更方便）
 ENV LD_LIBRARY_PATH=/opt/conda/lib:$LD_LIBRARY_PATH
 RUN cd server && \
     /opt/conda/bin/python3.9 -m PyInstaller --onefile \
-    --name 数据台账系统 \
+    --name data-ledger \
     --add-data "templates:templates" \
     --add-data "static:static" \
     --hidden-import openpyxl \
@@ -35,4 +34,4 @@ RUN cd server && \
 
 # ── 输出阶段 ──
 FROM scratch AS output
-COPY --from=builder /build/server/dist/数据台账系统 /dist/
+COPY --from=builder /build/server/dist/data-ledger /dist/
