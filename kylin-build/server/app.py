@@ -1887,11 +1887,3 @@ def _safe_tablename(name):
 if __name__ == "__main__":
     print("="*50); print("鏁版嵁鍙拌处绯荤粺"); print(f"  鍦板潃: http://127.0.0.1:5000"); print("="*50)
     app.run(host="0.0.0.0", port=5000, debug=True)
-
-
-import routes_column
-
-
-import routes_column
-
-import routes_column
