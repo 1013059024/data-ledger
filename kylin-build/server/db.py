@@ -1,8 +1,21 @@
 """
 麒麟版数据库操作工具 — SQLite 实现
+包含 MySQL 语法兼容层（自动转换 %s→?、反引号→双引号）
 """
 import re, datetime, sqlite3, os
 from config import DB_PATH
+
+
+# ── MySQL 语法兼容转换 ───────────────────────────────
+# 让 app.py 中的 MySQL 风格 SQL 自动适配 SQLite
+
+def _convert_sql(sql):
+    """将 MySQL 语法转换为 SQLite 兼容语法"""
+    # 1. %s 占位符 → ? （SQLite 原生占位符）
+    sql = re.sub(r'(?<!%)%s', '?', sql)
+    # 2. 反引号引用 → SQLite 双引号引用
+    sql = re.sub(r'`([^`]+)`', r'"\1"', sql)
+    return sql
 
 
 # ── 内部工具 ─────────────────────────────────────────
@@ -56,10 +69,11 @@ def _meta_del(key):
         conn.close()
 
 
-# ── 核心查询接口 ─────────────────────────────────────
+# ── 核心查询接口（带语法转换） ──────────────────────
 
 def query(sql, params=None):
     """执行 SELECT，返回所有行（dict 列表）"""
+    sql = _convert_sql(sql)  # ← MySQL→SQLite 转换
     conn = _get_conn()
     try:
         cur = conn.execute(sql, params or ())
@@ -71,6 +85,7 @@ def query(sql, params=None):
 
 def query_one(sql, params=None):
     """执行 SELECT，返回第一行（dict）或 None"""
+    sql = _convert_sql(sql)  # ← MySQL→SQLite 转换
     conn = _get_conn()
     try:
         cur = conn.execute(sql, params or ())
@@ -82,6 +97,7 @@ def query_one(sql, params=None):
 
 def execute(sql, params=None):
     """执行 INSERT/UPDATE/DELETE/DDL，返回影响行数"""
+    sql = _convert_sql(sql)  # ← MySQL→SQLite 转换
     conn = _get_conn()
     try:
         cur = conn.execute(sql, params or ())
@@ -135,7 +151,7 @@ def get_schema(tn):
                 "type": d["type"] or "TEXT",
                 "nullable": "YES" if d["notnull"] == 0 else "NO",
                 "default": d["dflt_value"],
-                "comment": "",  # SQLite 无原生列注释
+                "comment": "",
             })
         return result
     finally:
@@ -167,7 +183,6 @@ def distinct_values(tn, field, search="", filters=None):
     has_del = any(s["field"] == "_deleted" for s in schema)
     if has_del:
         conds.append("IFNULL(\"_deleted\",0) NOT IN (1,2)")
-    # 级联筛选
     if filters and isinstance(filters, dict):
         for fld, vals in filters.items():
             if fld != field and fld in [s["field"] for s in schema] and vals and isinstance(vals, list) and len(vals):
@@ -194,11 +209,7 @@ def get_page(tn, page=1, per_page=50, search="", order_field=None, order_dir="as
     if not schema:
         return 0, []
     fields = [s["field"] for s in schema]
-    tf = [
-        s["field"]
-        for s in schema
-        if "varchar" in s["type"].lower() or "text" in s["type"].lower()
-    ]
+    tf = [s["field"] for s in schema if "varchar" in s["type"].lower() or "text" in s["type"].lower()]
     so = order_field if order_field in fields else fields[0]
     sd = "DESC" if order_dir.upper() == "DESC" else "ASC"
     pa = []
@@ -222,18 +233,14 @@ def get_page(tn, page=1, per_page=50, search="", order_field=None, order_dir="as
     if per_page == -1:
         rows = query(f"SELECT * FROM \"{tn}\"{ws} ORDER BY \"{so}\" {sd}", pa)
     else:
-        rows = query(
-            f"SELECT * FROM \"{tn}\"{ws} ORDER BY \"{so}\" {sd} LIMIT ? OFFSET ?",
-            pa + [per_page, offset],
-        )
+        rows = query(f"SELECT * FROM \"{tn}\"{ws} ORDER BY \"{so}\" {sd} LIMIT ? OFFSET ?", pa + [per_page, offset])
     return total, rows
 
 
 # ── 表结构变更 ───────────────────────────────────────
 
 def rename_table(old_name, new_name):
-    execute("ALTER TABLE \"" + old_name + "\" RENAME TO \"" + new_name + "\"")
-    # 迁移注释
+    query_one("ALTER TABLE \"" + old_name + "\" RENAME TO \"" + new_name + "\"")
     comment = _meta_get(f"comment:{old_name}")
     if comment:
         _meta_set(f"comment:{new_name}", comment)
@@ -242,7 +249,7 @@ def rename_table(old_name, new_name):
 
 
 def drop_table(tn):
-    execute("DROP TABLE IF EXISTS \"" + tn + "\"")
+    query_one("DROP TABLE IF EXISTS \"" + tn + "\"")
     _meta_del(f"comment:{tn}")
     return True
 
@@ -260,8 +267,8 @@ def rename_column(tn, old_name, new_name):
         raise ValueError(f"字段 {old_name} 不存在")
     if new_name in col_names:
         raise ValueError(f"字段 '{new_name}' 已存在，无法重命名")
-    # SQLite 3.25+ 支持 RENAME COLUMN
     execute("ALTER TABLE \"" + tn + "\" RENAME COLUMN \"" + old_name + "\" TO \"" + new_name + "\"")
+
 
 # ── 建表 ─────────────────────────────────────────────
 
@@ -272,12 +279,7 @@ def _safe_colname(name):
     safe = re.sub(r'[^\w\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]', '_', s).strip("_")
     if not safe or safe[0].isdigit():
         safe = "col_" + safe
-    kw = {
-        "id", "key", "index", "order", "group", "select", "from", "where",
-        "table", "column", "date", "desc", "asc", "delete", "update",
-        "insert", "drop", "alter", "add", "primary", "unique", "foreign",
-        "check", "default",
-    }
+    kw = {"id", "key", "index", "order", "group", "select", "from", "where", "table", "column", "date", "desc", "asc", "delete", "update", "insert", "drop", "alter", "add", "primary", "unique", "foreign", "check", "default"}
     if safe.lower() in kw:
         safe += "_"
     return safe
@@ -285,42 +287,29 @@ def _safe_colname(name):
 
 def _infer_type(values):
     nv = [v for v in values if v is not None and str(v).strip() != ""]
-    if not nv:
-        return "TEXT"
-    ai = True
-    af = True
+    if not nv: return "TEXT"
+    ai = True; af = True
     for v in nv:
         s = str(v).strip()
-        try:
-            int(s)
-        except:
-            ai = False
-        try:
-            float(s)
-        except:
-            af = False
+        try: int(s)
+        except: ai = False
+        try: float(s)
+        except: af = False
     if ai:
         for v in nv:
             try:
-                if abs(int(v)) > 2147483647:
-                    return "BIGINT"
-            except:
-                pass
+                if abs(int(v)) > 2147483647: return "BIGINT"
+            except: pass
         return "INT"
-    if af:
-        return "DOUBLE"
+    if af: return "DOUBLE"
     return "TEXT"
 
 
 def create_empty_table(tn, columns=None, comment=""):
-    """创建一个空表，可指定字段列表"""
     safe_name = _safe_colname(tn)
-    if not safe_name:
-        return False, "无效的表名"
+    if not safe_name: return False, "无效的表名"
     existing = {t["name"] for t in get_tables()}
-    if safe_name in existing:
-        return False, f"表 `{safe_name}` 已存在"
-
+    if safe_name in existing: return False, f"表 `{safe_name}` 已存在"
     col_defs = []
     if columns:
         for col in columns:
@@ -330,23 +319,18 @@ def create_empty_table(tn, columns=None, comment=""):
                 safe_cn = _safe_colname(col_name)
                 col_defs.append(f"\"{safe_cn}\" {col_type}")
     cols_sql = ", " + ", ".join(col_defs) if col_defs else ""
-
     sql = f'CREATE TABLE "{safe_name}" ("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT{cols_sql})'
     try:
         execute(sql)
     except Exception as e:
         return False, f"建表失败: {e}"
-
     if comment:
         set_table_comment(safe_name, comment)
-
     return True, f"表 `{safe_name}` 创建成功" + (f"，已添加 {len(col_defs)} 个字段" if col_defs else "")
 
 
 def create_table_from_data(headers, rows, tn):
-    """从导入数据创建表（批量插入）"""
-    if not headers or not rows:
-        return False, "表头或数据为空"
+    if not headers or not rows: return False, "表头或数据为空"
     sh = [_safe_colname(h) for h in headers]
     cd = list(zip(*rows))
     cd2 = []
@@ -354,33 +338,23 @@ def create_table_from_data(headers, rows, tn):
         ct = _infer_type(cd[i] if i < len(cd) else [])
         cd2.append(f"\"{cn}\" {ct}")
     try:
-        execute(
-            f'CREATE TABLE "{tn}" ('
-            f'"id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, '
-            f'{", ".join(cd2)})'
-        )
+        execute(f'CREATE TABLE "{tn}" ("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, {", ".join(cd2)})')
     except Exception as e:
         return False, f"建表失败: {e}"
-
     ph = ", ".join(["?"] * len(sh))
     fl = ", ".join([f"\"{h}\"" for h in sh])
     conn = _get_conn()
     try:
         cur = conn.cursor()
         for row in rows:
-            cr = [
-                None if v is None or (isinstance(v, str) and v.strip() == "") else v
-                for v in row
-            ]
+            cr = [None if v is None or (isinstance(v, str) and v.strip() == "") else v for v in row]
             cur.execute(f"INSERT INTO \"{tn}\" ({fl}) VALUES ({ph})", cr)
         conn.commit()
         return True, f"表 `{tn}` 建表成功，已导入 {len(rows)} 条记录"
     except Exception as e:
         conn.rollback()
-        try:
-            execute(f"DROP TABLE IF EXISTS \"{tn}\"")
-        except:
-            pass
+        try: execute(f"DROP TABLE IF EXISTS \"{tn}\"")
+        except: pass
         return False, f"导入失败: {e}"
     finally:
         conn.close()
@@ -389,23 +363,19 @@ def create_table_from_data(headers, rows, tn):
 # ── 数据库整体导出/导入 ─────────────────────────────
 
 def get_create_sql(tn):
-    """获取 CREATE TABLE 语句（用于备份）"""
     r = query_one("SELECT \"sql\" FROM \"sqlite_master\" WHERE \"type\"='table' AND \"name\"=?", (tn,))
     return r["sql"] if r else None
 
 
 def export_all_tables():
-    """导出所有表的结构+数据+配置，返回可 JSON 序列化的 dict"""
     tables = get_tables()
     result = []
     for t in tables:
         tn = t["name"]
         create_sql = get_create_sql(tn)
-        if not create_sql:
-            continue
+        if not create_sql: continue
         pk = get_pk_column(tn) or "id"
         rows = query(f"SELECT * FROM \"{tn}\" ORDER BY \"{pk}\"")
-        # datetime 转字符串
         serialized = []
         for row in rows:
             sr = {}
@@ -419,28 +389,18 @@ def export_all_tables():
                 else:
                     sr[k] = str(v)
             serialized.append(sr)
-        result.append({
-            "name": tn,
-            "create_sql": create_sql,
-            "rows": serialized,
-        })
+        result.append({"name": tn, "create_sql": create_sql, "rows": serialized})
     return result
 
 
 def import_tables(table_list, drop_existing=True):
-    """从 export_all_tables 的输出恢复表"""
-    ok = 0
-    fail = 0
-    errors = []
+    ok = 0; fail = 0; errors = []
     for td in table_list:
-        tn = td["name"]
-        create_sql = td["create_sql"]
-        rows = td.get("rows", [])
+        tn = td["name"]; create_sql = td["create_sql"]; rows = td.get("rows", [])
         try:
             if drop_existing:
                 existing = get_schema(tn)
-                if existing:
-                    execute(f"DROP TABLE IF EXISTS \"{tn}\"")
+                if existing: execute(f"DROP TABLE IF EXISTS \"{tn}\"")
             execute(create_sql)
             if rows:
                 schema = get_schema(tn)
