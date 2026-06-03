@@ -1,6 +1,6 @@
 """
 麒麟版数据库操作工具 — SQLite 实现
-包含 MySQL 语法兼容层（自动转换 %s→?、反引号→双引号）
+包含 MySQL 语法兼容层（自动转换 %s→?、反引号→双引号、清除 ENGINE=InnoDB）
 """
 import re, datetime, sqlite3, os
 from config import DB_PATH
@@ -15,6 +15,8 @@ def _convert_sql(sql):
     sql = re.sub(r'(?<!%)%s', '?', sql)
     # 2. 反引号引用 → SQLite 双引号引用
     sql = re.sub(r'`([^`]+)`', r'"\1"', sql)
+    # 3. 清除 MySQL 专属表选项（备份 JSON 中的 CREATE TABLE 包含 ENGINE=InnoDB 等）
+    sql = re.sub(r'\s+ENGINE\s*=\s*\w+(?:\s+DEFAULT\s+(?:CHARSET|COLLATE)\s*=\s*\w+)*', '', sql, flags=re.IGNORECASE)
     return sql
 
 
