@@ -7,17 +7,12 @@ from config import DB_PATH
 
 
 # ── MySQL 语法兼容转换 ───────────────────────────────
-# 让 app.py 中的 MySQL 风格 SQL 自动适配 SQLite
 
 def _convert_sql(sql):
     """将 MySQL 语法转换为 SQLite 兼容语法"""
-    # 1. %s 占位符 → ? （SQLite 原生占位符）
     sql = re.sub(r'(?<!%)%s', '?', sql)
-    # 2. 反引号引用 → SQLite 双引号引用
     sql = re.sub(r'`([^`]+)`', r'"\1"', sql)
-    # 3. 清除 MySQL 专属表选项（备份 JSON 中的 CREATE TABLE 包含 ENGINE=InnoDB 等）
     sql = re.sub(r'\s+ENGINE\s*=\s*\w+(?:\s+DEFAULT\s+(?:CHARSET|COLLATE)\s*=\s*\w+)*', '', sql, flags=re.IGNORECASE)
-    # 4. AUTO_INCREMENT → AUTOINCREMENT（旧版 MySQL 备份兼容）
     sql = re.sub(r'"id"\s+INT\s+NOT\s+NULL\s+AUTO_INCREMENT\s*,', '"id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,', sql, flags=re.IGNORECASE)
     sql = re.sub(r'\s*,\s*PRIMARY\s+KEY\s*\(\s*"id"\s*\)', '', sql, flags=re.IGNORECASE)
     return sql
@@ -26,23 +21,19 @@ def _convert_sql(sql):
 # ── 内部工具 ─────────────────────────────────────────
 
 def _get_conn():
-    """获取 SQLite 连接（row_factory = Row，支持按列名访问）"""
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = OFF")
     return conn
 
-
 def _ensure_meta():
-    """确保 _meta 表存在（用于存储表注释、列注释等元数据）"""
     conn = _get_conn()
     try:
         conn.execute("CREATE TABLE IF NOT EXISTS \"_meta\" (\"key\" TEXT PRIMARY KEY, \"value\" TEXT)")
         conn.commit()
     finally:
         conn.close()
-
 
 def _meta_get(key):
     _ensure_meta()
@@ -53,7 +44,6 @@ def _meta_get(key):
     finally:
         conn.close()
 
-
 def _meta_set(key, val):
     _ensure_meta()
     conn = _get_conn()
@@ -62,7 +52,6 @@ def _meta_set(key, val):
         conn.commit()
     finally:
         conn.close()
-
 
 def _meta_del(key):
     _ensure_meta()
@@ -77,32 +66,25 @@ def _meta_del(key):
 # ── 核心查询接口（带语法转换） ──────────────────────
 
 def query(sql, params=None):
-    """执行 SELECT，返回所有行（dict 列表）"""
-    sql = _convert_sql(sql)  # ← MySQL→SQLite 转换
+    sql = _convert_sql(sql)
     conn = _get_conn()
     try:
         cur = conn.execute(sql, params or ())
-        rows = cur.fetchall()
-        return [dict(r) for r in rows]
+        return [dict(r) for r in cur.fetchall()]
     finally:
         conn.close()
 
-
 def query_one(sql, params=None):
-    """执行 SELECT，返回第一行（dict）或 None"""
-    sql = _convert_sql(sql)  # ← MySQL→SQLite 转换
+    sql = _convert_sql(sql)
     conn = _get_conn()
     try:
-        cur = conn.execute(sql, params or ())
-        r = cur.fetchone()
+        r = conn.execute(sql, params or ()).fetchone()
         return dict(r) if r else None
     finally:
         conn.close()
 
-
 def execute(sql, params=None):
-    """执行 INSERT/UPDATE/DELETE/DDL，返回影响行数"""
-    sql = _convert_sql(sql)  # ← MySQL→SQLite 转换
+    sql = _convert_sql(sql)
     conn = _get_conn()
     try:
         cur = conn.execute(sql, params or ())
@@ -115,62 +97,28 @@ def execute(sql, params=None):
 # ── 元数据查询 ───────────────────────────────────────
 
 def get_tables():
-    """获取所有用户表（排除 _meta、sqlite_ 系统表）"""
-    rows = query(
-        "SELECT \"name\" FROM \"sqlite_master\" WHERE \"type\"='table' "
-        "AND \"name\" NOT LIKE 'sqlite_%' AND \"name\" != '_meta' "
-        "ORDER BY \"name\""
-    )
-    result = []
-    for r in rows:
-        name = r["name"]
-        comment = _meta_get(f"comment:{name}") or ""
-        result.append({"name": name, "comment": comment})
-    return result
-
+    rows = query("SELECT \"name\" FROM \"sqlite_master\" WHERE \"type\"='table' AND \"name\" NOT LIKE 'sqlite_%' AND \"name\" != '_meta' ORDER BY \"name\"")
+    return [{"name": r["name"], "comment": _meta_get(f"comment:{r['name']}") or ""} for r in rows]
 
 def get_table_comment(tn):
-    """获取表注释"""
     return _meta_get(f"comment:{tn}") or ""
 
-
 def set_table_comment(tn, comment):
-    """设置表注释"""
-    if comment:
-        _meta_set(f"comment:{tn}", comment)
-    else:
-        _meta_del(f"comment:{tn}")
-
+    if comment: _meta_set(f"comment:{tn}", comment)
+    else: _meta_del(f"comment:{tn}")
 
 def get_schema(tn):
-    """获取表字段信息（与 MySQL 版返回值一致）"""
     conn = _get_conn()
     try:
-        cur = conn.execute("PRAGMA table_info(\"" + tn + "\")")
-        cols = cur.fetchall()
-        result = []
-        for c in cols:
-            d = dict(c)
-            result.append({
-                "field": d["name"],
-                "type": d["type"] or "TEXT",
-                "nullable": "YES" if d["notnull"] == 0 else "NO",
-                "default": d["dflt_value"],
-                "comment": "",
-            })
-        return result
+        return [{"field": c["name"], "type": c["type"] or "TEXT", "nullable": "YES" if c["notnull"] == 0 else "NO", "default": c["dflt_value"], "comment": ""} for c in conn.execute("PRAGMA table_info(\"" + tn + "\")").fetchall()]
     finally:
         conn.close()
 
-
 def get_pk_column(tn):
-    """获取主键字段名"""
     conn = _get_conn()
     try:
-        cur = conn.execute("PRAGMA table_info(\"" + tn + "\")")
-        for c in cur.fetchall():
-            if c["pk"] > 0:
-                return c["name"]
+        for c in conn.execute("PRAGMA table_info(\"" + tn + "\")").fetchall():
+            if c["pk"] > 0: return c["name"]
         return None
     finally:
         conn.close()
@@ -179,62 +127,46 @@ def get_pk_column(tn):
 # ── 去重值（筛选面板用） ─────────────────────────────
 
 def distinct_values(tn, field, search="", filters=None):
-    """获取某列的去重值，支持搜索过滤和级联筛选"""
     schema = get_schema(tn)
-    if not any(s["field"] == field for s in schema):
-        return []
-    conds = []
-    pa = []
+    if not any(s["field"] == field for s in schema): return []
+    conds, pa = [], []
     has_del = any(s["field"] == "_deleted" for s in schema)
-    if has_del:
-        conds.append("IFNULL(\"_deleted\",0) NOT IN (1,2)")
+    if has_del: conds.append("IFNULL(\"_deleted\",0) NOT IN (1,2)")
     if filters and isinstance(filters, dict):
         for fld, vals in filters.items():
             if fld != field and fld in [s["field"] for s in schema] and vals and isinstance(vals, list) and len(vals):
                 phs = ", ".join(["?"] * len(vals))
                 conds.append(f"\"{fld}\" IN ({phs})")
                 pa.extend(vals)
-    if search:
-        conds.append(f"\"{field}\" LIKE ?")
-        pa.append(f"%{search}%")
+    if search: conds.append(f"\"{field}\" LIKE ?"); pa.append(f"%{search}%")
     ws = " WHERE " + " AND ".join(conds) if conds else ""
-    rows = query(
-        f"SELECT \"{field}\" AS v, COUNT(*) AS c FROM \"{tn}\"{ws} GROUP BY \"{field}\" ORDER BY \"{field}\"",
-        pa,
-    )
+    rows = query(f"SELECT \"{field}\" AS v, COUNT(*) AS c FROM \"{tn}\"{ws} GROUP BY \"{field}\" ORDER BY \"{field}\"", pa)
     return [{"value": r["v"], "count": r["c"]} for r in rows if r["v"] is not None]
 
 
 # ── 分页查询 ─────────────────────────────────────────
 
 def get_page(tn, page=1, per_page=50, search="", order_field=None, order_dir="asc", hide_deleted=False, filters=None):
-    """分页查询（与 MySQL 版接口一致）"""
     offset = (page - 1) * per_page
     schema = get_schema(tn)
-    if not schema:
-        return 0, []
+    if not schema: return 0, []
     fields = [s["field"] for s in schema]
     tf = [s["field"] for s in schema if "varchar" in s["type"].lower() or "text" in s["type"].lower()]
     so = order_field if order_field in fields else fields[0]
     sd = "DESC" if order_dir.upper() == "DESC" else "ASC"
-    pa = []
+    pa, conds = [], []
     has_del = any(s["field"] == "_deleted" for s in schema)
-    conds = []
-    if hide_deleted and has_del:
-        conds.append("IFNULL(\"_deleted\",0) NOT IN (1,2)")
+    if hide_deleted and has_del: conds.append("IFNULL(\"_deleted\",0) NOT IN (1,2)")
     if filters and isinstance(filters, dict):
         for fld, vals in filters.items():
             if fld in fields and vals and isinstance(vals, list) and len(vals):
                 phs = ", ".join(["?"] * len(vals))
-                conds.append(f"\"{fld}\" IN ({phs})")
-                pa.extend(vals)
+                conds.append(f"\"{fld}\" IN ({phs})"); pa.extend(vals)
     if search:
-        lc = [f"\"{f}\" LIKE ?" for f in tf]
-        pa.extend([f"%{search}%" for _ in tf])
+        lc = [f"\"{f}\" LIKE ?" for f in tf]; pa.extend([f"%{search}%" for _ in tf])
         conds.append("(" + " OR ".join(lc) + ")")
     ws = " WHERE " + " AND ".join(conds) if conds else ""
-    cr = query_one(f"SELECT COUNT(*) AS cnt FROM \"{tn}\"{ws}", pa)
-    total = cr["cnt"] if cr else 0
+    total = (query_one(f"SELECT COUNT(*) AS cnt FROM \"{tn}\"{ws}", pa) or {}).get("cnt", 0)
     if per_page == -1:
         rows = query(f"SELECT * FROM \"{tn}\"{ws} ORDER BY \"{so}\" {sd}", pa)
     else:
@@ -247,53 +179,69 @@ def get_page(tn, page=1, per_page=50, search="", order_field=None, order_dir="as
 def rename_table(old_name, new_name):
     query_one("ALTER TABLE \"" + old_name + "\" RENAME TO \"" + new_name + "\"")
     comment = _meta_get(f"comment:{old_name}")
-    if comment:
-        _meta_set(f"comment:{new_name}", comment)
-        _meta_del(f"comment:{old_name}")
+    if comment: _meta_set(f"comment:{new_name}", comment); _meta_del(f"comment:{old_name}")
     return True
-
 
 def drop_table(tn):
-    query_one("DROP TABLE IF EXISTS \"" + tn + "\"")
-    _meta_del(f"comment:{tn}")
+    query_one("DROP TABLE IF EXISTS \"" + tn + "\""); _meta_del(f"comment:{tn}")
     return True
-
 
 def update_cell(tn, row_id, field, value):
     pk = get_pk_column(tn) or "id"
     execute("UPDATE \"" + tn + "\" SET \"" + field + "\"=? WHERE \"" + pk + "\"=?", (value, row_id))
     return True
 
-
 def rename_column(tn, old_name, new_name):
     schema = get_schema(tn)
     col_names = [s["field"] for s in schema]
-    if old_name not in col_names:
-        raise ValueError(f"字段 {old_name} 不存在")
-    if new_name in col_names:
-        raise ValueError(f"字段 '{new_name}' 已存在，无法重命名")
+    if old_name not in col_names: raise ValueError(f"字段 {old_name} 不存在")
+    if new_name in col_names: raise ValueError(f"字段 '{new_name}' 已存在，无法重命名")
     execute("ALTER TABLE \"" + tn + "\" RENAME COLUMN \"" + old_name + "\" TO \"" + new_name + "\"")
+
+
+def alter_column_type(tn, col, new_type):
+    """SQLite 修改列数据类型：重建表策略"""
+    schema = get_schema(tn)
+    if col not in [s["field"] for s in schema]: raise ValueError(f"字段 {col} 不存在")
+    col_defs = []
+    for s in schema:
+        fn = s["field"]
+        if fn == "id": col_defs.append('"id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT')
+        elif fn == col: col_defs.append(f'"{fn}" {new_type}')
+        else: col_defs.append(f'"{fn}" {s["type"]}')
+    data_cols = ", ".join(f'"{c}"' for c in [s["field"] for s in schema if s["field"] != "id"])
+    tmp, safe = f'"{tn}_tmp_retype"', f'"{tn}"'
+    conn = _get_conn()
+    try:
+        conn.execute("BEGIN")
+        conn.execute(f"CREATE TABLE {tmp} ({', '.join(col_defs)})")
+        if data_cols: conn.execute(f"INSERT INTO {tmp} ({data_cols}) SELECT {data_cols} FROM {safe}")
+        conn.execute(f"DROP TABLE {safe}"); conn.execute(f"ALTER TABLE {tmp} RENAME TO {safe}")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        try: conn.execute(f"DROP TABLE IF EXISTS {tmp}")
+        except: pass
+        raise
+    finally:
+        conn.close()
 
 
 # ── 建表 ─────────────────────────────────────────────
 
 def _safe_colname(name):
-    if not name:
-        return "col"
+    if not name: return "col"
     s = str(name).strip()
     safe = re.sub(r'[^\w\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]', '_', s).strip("_")
-    if not safe or safe[0].isdigit():
-        safe = "col_" + safe
+    if not safe or safe[0].isdigit(): safe = "col_" + safe
     kw = {"id", "key", "index", "order", "group", "select", "from", "where", "table", "column", "date", "desc", "asc", "delete", "update", "insert", "drop", "alter", "add", "primary", "unique", "foreign", "check", "default"}
-    if safe.lower() in kw:
-        safe += "_"
+    if safe.lower() in kw: safe += "_"
     return safe
-
 
 def _infer_type(values):
     nv = [v for v in values if v is not None and str(v).strip() != ""]
     if not nv: return "TEXT"
-    ai = True; af = True
+    ai = af = True
     for v in nv:
         s = str(v).strip()
         try: int(s)
@@ -309,7 +257,6 @@ def _infer_type(values):
     if af: return "DOUBLE"
     return "TEXT"
 
-
 def create_empty_table(tn, columns=None, comment=""):
     safe_name = _safe_colname(tn)
     if not safe_name: return False, "无效的表名"
@@ -318,36 +265,23 @@ def create_empty_table(tn, columns=None, comment=""):
     col_defs = []
     if columns:
         for col in columns:
-            col_name = col.get("name", "").strip()
-            col_type = col.get("type", "VARCHAR(255)").strip()
-            if col_name and col_name.lower() != "id":
-                safe_cn = _safe_colname(col_name)
-                col_defs.append(f"\"{safe_cn}\" {col_type}")
+            col_name = col.get("name", "").strip(); col_type = col.get("type", "VARCHAR(255)").strip()
+            if col_name and col_name.lower() != "id": col_defs.append(f"\"{_safe_colname(col_name)}\" {col_type}")
     cols_sql = ", " + ", ".join(col_defs) if col_defs else ""
-    sql = f'CREATE TABLE "{safe_name}" ("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT{cols_sql})'
     try:
-        execute(sql)
-    except Exception as e:
-        return False, f"建表失败: {e}"
-    if comment:
-        set_table_comment(safe_name, comment)
-    return True, f"表 `{safe_name}` 创建成功" + (f"，已添加 {len(col_defs)} 个字段" if col_defs else "")
-
+        execute(f'CREATE TABLE "{safe_name}" ("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT{cols_sql})')
+    except Exception as e: return False, f"建表失败: {e}"
+    if comment: set_table_comment(safe_name, comment)
+    return True, f"表 `{safe_name}` 创建成功"
 
 def create_table_from_data(headers, rows, tn):
     if not headers or not rows: return False, "表头或数据为空"
     sh = [_safe_colname(h) for h in headers]
     cd = list(zip(*rows))
-    cd2 = []
-    for i, cn in enumerate(sh):
-        ct = _infer_type(cd[i] if i < len(cd) else [])
-        cd2.append(f"\"{cn}\" {ct}")
-    try:
-        execute(f'CREATE TABLE "{tn}" ("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, {", ".join(cd2)})')
-    except Exception as e:
-        return False, f"建表失败: {e}"
-    ph = ", ".join(["?"] * len(sh))
-    fl = ", ".join([f"\"{h}\"" for h in sh])
+    cd2 = [f"\"{cn}\" {_infer_type(cd[i] if i < len(cd) else [])}" for i, cn in enumerate(sh)]
+    try: execute(f'CREATE TABLE "{tn}" ("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, {", ".join(cd2)})')
+    except Exception as e: return False, f"建表失败: {e}"
+    ph = ", ".join(["?"] * len(sh)); fl = ", ".join([f"\"{h}\"" for h in sh])
     conn = _get_conn()
     try:
         cur = conn.cursor()
@@ -361,26 +295,19 @@ def create_table_from_data(headers, rows, tn):
         try: execute(f"DROP TABLE IF EXISTS \"{tn}\"")
         except: pass
         return False, f"导入失败: {e}"
-    finally:
-        conn.close()
+    finally: conn.close()
 
 
 # ── 数据库整体导出/导入（跨平台兼容） ───────────────
-# 备份 JSON 存储 schema（字段列表）而非原生 SQL，
-# 确保 MySQL 版导出的备份可在 SQLite 版恢复，反之亦然。
 
 def get_create_sql(tn):
     r = query_one("SELECT \"sql\" FROM \"sqlite_master\" WHERE \"type\"='table' AND \"name\"=?", (tn,))
     return r["sql"] if r else None
 
-
 def export_all_tables():
-    """导出所有表的结构（schema）+ 数据，不依赖原生 SQL"""
-    tables = get_tables()
-    result = []
+    tables = get_tables(); result = []
     for t in tables:
-        tn = t["name"]
-        schema = get_schema(tn)
+        tn = t["name"]; schema = get_schema(tn)
         if not schema: continue
         pk = get_pk_column(tn) or "id"
         rows = query(f"SELECT * FROM \"{tn}\" ORDER BY \"{pk}\"")
@@ -388,22 +315,15 @@ def export_all_tables():
         for row in rows:
             sr = {}
             for k, v in row.items():
-                if isinstance(v, (datetime.datetime, datetime.date)):
-                    sr[k] = v.isoformat()
-                elif isinstance(v, bytes):
-                    sr[k] = str(v)
-                elif v is None or isinstance(v, (str, int, float, bool)):
-                    sr[k] = v
-                else:
-                    sr[k] = str(v)
+                if isinstance(v, (datetime.datetime, datetime.date)): sr[k] = v.isoformat()
+                elif isinstance(v, bytes): sr[k] = str(v)
+                elif v is None or isinstance(v, (str, int, float, bool)): sr[k] = v
+                else: sr[k] = str(v)
             serialized.append(sr)
-        # 存储 schema（字段列表）代替原生 SQL，实现跨数据库迁移
         result.append({"name": tn, "schema": schema, "rows": serialized})
     return result
 
-
 def import_tables(table_list, drop_existing=True):
-    """从备份恢复表（支持跨数据库 MySQL↔SQLite 迁移）"""
     ok = 0; fail = 0; errors = []
     for td in table_list:
         tn = td["name"]; rows = td.get("rows", [])
@@ -411,37 +331,26 @@ def import_tables(table_list, drop_existing=True):
             if drop_existing:
                 existing = get_schema(tn)
                 if existing: execute(f"DROP TABLE IF EXISTS \"{tn}\"")
-            
-            # 优先使用 schema（字段列表），兼容旧版 create_sql
             schema = td.get("schema", [])
             if not schema and td.get("create_sql"):
-                # 旧版备份：通过 get_schema 获取字段信息（转换后再读）
                 execute(td["create_sql"])
                 schema = get_schema(tn)
-            if not schema:
-                fail += 1; errors.append(f"{tn}: 缺少字段定义"); continue
-            
+            if not schema: fail += 1; errors.append(f"{tn}: 缺少字段定义"); continue
             col_defs = []
             for col in schema:
-                fn = col["field"]
+                fn = col["field"]; ft = col["type"]
                 if fn == "id": continue
-                ft = col["type"]
                 col_defs.append(f"\"{fn}\" {ft}")
             cols_sql = ", " + ", ".join(col_defs) if col_defs else ""
             execute(f'CREATE TABLE "{tn}" ("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT{cols_sql})')
-            
-            # 插入数据
             if rows:
                 fresh_schema = get_schema(tn)
                 fields = [s["field"] for s in fresh_schema if s["field"] != "id"]
                 if fields:
-                    ph = ", ".join(["?"] * len(fields))
-                    fl = ", ".join([f"\"{f}\"" for f in fields])
+                    ph = ", ".join(["?"] * len(fields)); fl = ", ".join([f"\"{f}\"" for f in fields])
                     for row in rows:
-                        vals = [row.get(f) for f in fields]
-                        execute(f"INSERT INTO \"{tn}\" ({fl}) VALUES ({ph})", vals)
+                        execute(f"INSERT INTO \"{tn}\" ({fl}) VALUES ({ph})", [row.get(f) for f in fields])
             ok += 1
         except Exception as e:
-            fail += 1
-            errors.append(f"{tn}: {e}")
+            fail += 1; errors.append(f"{tn}: {e}")
     return ok, fail, errors
