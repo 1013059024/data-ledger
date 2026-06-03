@@ -591,7 +591,8 @@ def api_set_column_type(table_name, column_name):
         nt_upper = new_type.upper()
         if any(kw in nt_upper for kw in ("DECIMAL", "INT", "DOUBLE", "FLOAT", "NUMERIC", "BIGINT", "SMALLINT", "TINYINT")):
             execute(f"UPDATE `{table_name}` SET `{column_name}`=NULL WHERE `{column_name}`='' OR `{column_name}` IS NULL")
-        execute(f"ALTER TABLE `{table_name}` MODIFY COLUMN `{column_name}` {new_type}")
+        from db import alter_column_type
+        alter_column_type(table_name, column_name, new_type)
         return jsonify({"code": 0, "msg": f"已修改为 {new_type}"})
     except Exception as e:
         return jsonify({"code": 1, "msg": f"修改失败: {e}"})
@@ -615,18 +616,30 @@ def api_reorder_columns(table_name):
             if missing: msg += f"，缺少: {missing}"
             if extra: msg += f"，多余: {extra}"
             return jsonify({"code": 1, "msg": msg})
-        from db import get_conn
-        conn = get_conn()
-        with conn.cursor() as cur:
-            prev = None
-            for fld in new_order:
-                col_type = next((s["type"] for s in schema if s["field"] == fld), "VARCHAR(255)")
-                if prev:
-                    cur.execute(f"ALTER TABLE `{table_name}` MODIFY COLUMN `{fld}` {col_type} AFTER `{prev}`")
-                else:
-                    cur.execute(f"ALTER TABLE `{table_name}` MODIFY COLUMN `{fld}` {col_type} FIRST")
-                prev = fld
-        conn.commit()
+        # 重建表实现重排序：SQLite 不支持 MODIFY COLUMN ... AFTER
+        schema_map = {s["field"]: s["type"] for s in get_schema(table_name)}
+        col_defs = ['"id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT']
+        for fld in new_order:
+            col_defs.append(f'"{fld}" {schema_map.get(fld, "VARCHAR(255)")}')
+        data_cols = ", ".join(f'"{c}"' for c in new_order)
+        tmp = f'"{table_name}_tmp_reorder"'
+        safe = f'"{table_name}"'
+        conn = _get_conn()
+        try:
+            conn.execute("BEGIN")
+            conn.execute(f"CREATE TABLE {tmp} ({', '.join(col_defs)})")
+            if new_order:
+                conn.execute(f"INSERT INTO {tmp} ({data_cols}) SELECT {data_cols} FROM {safe}")
+            conn.execute(f"DROP TABLE {safe}")
+            conn.execute(f"ALTER TABLE {tmp} RENAME TO {safe}")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            try: conn.execute(f"DROP TABLE IF EXISTS {tmp}")
+            except: pass
+            raise
+        finally:
+            conn.close()
         return jsonify({"code": 0, "msg": "字段顺序已调整"})
     except Exception as e:
         return jsonify({"code": 1, "msg": f"调整失败: {e}"})
@@ -1042,7 +1055,8 @@ def api_sync_backfill():
                         m = re2.search(r"column '(\w+)'", es)
                         if m:
                             try:
-                                execute(f"ALTER TABLE `{tbl}` MODIFY COLUMN `{m.group(1)}` TEXT")
+                                from db import alter_column_type
+                                alter_column_type(tbl, m.group(1), "TEXT")
                                 execute(f"UPDATE `{tbl}` SET {sets} WHERE `{kf}`=%s", list(af_vals.values()) + [kv])
                                 filled += 1
                                 continue
