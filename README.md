@@ -1,44 +1,49 @@
-# 🛣️ 数据台账系统系统
+# 数据台账系统 — 麒麟版
 
-农村公路建设项目台账管理工具。
-
-> 详细操作说明见 **[使用手册.md](使用手册.md)**
+ARM64 Linux 单文件 Web 应用（Flask + SQLite），用于表格数据浏览、编辑、导入/导出。
 
 ---
 
-## 目录结构
-
-```
-E:\reasonix-data\projects\data-ledger\
-├── server/              ← 源码
-│   ├── app.py            Flask 路由与业务逻辑
-│   ├── db.py             数据库操作层
-│   ├── config.py         配置
-│   └── templates/        前端界面
-├── mysql-data/           ← MySQL 数据目录
-├── _备份_源码勿删!/       ← 源码备份（火绒保护）
-├── portable_packages/    ← 便携包（linux / win 两种）
-├── build_portable.py     ← 便携版打包脚本
-├── start.py / start.bat ← 启动脚本
-├── 使用手册.md            ← 操作指南
-└── 使用手册.md           ← 本文档
-```
-
-## 快速启动
+## 启动方式
 
 ```bash
-pip install flask pymysql openpyxl xlrd
-python start.py
+bash start.sh
 ```
 
-浏览器打开 http://127.0.0.1:5000
+打开浏览器访问 **http://127.0.0.1:5000**
 
-## 便携版打包
+---
 
-```bash
-python build_portable.py
+## 常见问题
+
+### Excel 导入提示"失败"
+
+旧目录的进程仍占着 5000 端口。已修改 `start.sh` 自动检测并杀掉旧进程，运行 `bash start.sh` 即可。
+
+### 按钮前有小方框
+
+360 浏览器 emoji 渲染问题，换 Chrome/Firefox 即可。
+
+---
+
+## 项目结构
+
+```
+├── start.sh          # 启动脚本（自动清理旧进程）
+├── py.tar.gz         # ARM64 Python 运行环境
+├── bin/              # Python 3.9 及工具链
+├── server/           # Web 应用（Flask + SQLite）
+│   ├── app.py        # 主程序
+│   ├── db.py         # 数据库操作
+│   ├── config.py     # 配置
+│   ├── static/       # 静态资源
+│   └── templates/    # 前端页面
+├── data/             # 数据库文件
+└── README.md
 ```
 
-输出在 `target/data-ledger-便携版/`
+## 构建
 
-> 需要本机安装 MySQL 8.4 + 有网络
+GitHub Actions 自动构建，使用 conda-pack 打包 ARM64 Python 运行环境。
+
+详细操作见 [使用手册.md](使用手册.md)
