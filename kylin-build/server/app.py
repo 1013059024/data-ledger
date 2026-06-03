@@ -4,7 +4,7 @@
 import os, json, uuid, tempfile, re, datetime
 from flask import Flask, jsonify, render_template, request, send_file
 from config import FLASK_SECRET
-from db import get_tables, get_schema, get_page, get_pk_column, create_empty_table, create_table_from_data, drop_table, rename_table, update_cell, rename_column, query_one, query, execute, distinct_values, get_table_comment
+from db import get_tables, get_schema, get_page, get_pk_column, create_empty_table, create_table_from_data, drop_table, rename_table, update_cell, rename_column, query_one, query, execute, distinct_values, get_table_comment, set_table_comment
 
 app = Flask(__name__)
 app.secret_key = FLASK_SECRET
@@ -215,7 +215,7 @@ def api_rename_table(table_name):
     if nn == table_name: return jsonify({"code": 0, "msg": "未改变"})
     try:
         rename_table(table_name, nn)
-        db_execute(f"ALTER TABLE `{nn}` COMMENT = %s", (nn,))
+        set_table_comment(nn, nn)
         km = _load_kf()
         if table_name in km:
             km[nn] = km.pop(table_name)
@@ -1532,7 +1532,7 @@ def api_backup_restore():
         for s in bk["schema"]:
             if s["field"] == "id": continue
             col_defs.append(f"`{s['field']}` {s['type']} NULL")
-        sql = f"CREATE TABLE `{tn}` (`id` INT NOT NULL AUTO_INCREMENT, {', '.join(col_defs)}, PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        sql = f"CREATE TABLE `{tn}` (`id` INT NOT NULL AUTO_INCREMENT, {', '.join(col_defs)}, PRIMARY KEY (`id`)) "
         execute(sql)
         # 恢复数据
         fields = [s["field"] for s in bk["schema"] if s["field"] != "id"]
