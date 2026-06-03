@@ -14,12 +14,16 @@ RUN curl -fsSL -o /tmp/miniforge.sh \
 
 ENV PATH=/opt/conda/bin:$PATH
 
-# 创建 Python 运行环境 + 安装依赖
-RUN conda create -y -n py python=3.9 pip && \
-    conda run -n py pip install --no-cache-dir \
-        flask>=3.0 openpyxl>=3.1 xlrd>=2.0 && \
-    conda install -y -n py conda-pack && \
-    conda run -n py conda-pack -p /opt/conda/envs/py -o /tmp/py.tar.gz
+# 创建 Python 运行环境 + 安装依赖（全部用 conda 安装，更稳定）
+RUN conda create -y -n py python=3.9 && \
+    conda install -y -n py -c conda-forge \
+        flask \
+        openpyxl \
+        "xlrd>=1.2,<2.0" \
+        conda-pack
+
+# 打包环境
+RUN conda run -n py conda-pack -p /opt/conda/envs/py -o /tmp/py.tar.gz
 
 # 打包产物
 RUN mkdir -p /dist/app && \
@@ -27,7 +31,6 @@ RUN mkdir -p /dist/app && \
     cp /tmp/py.tar.gz /dist/app/
 
 # 创建启动脚本
-# 注意：conda-pack 解压后 python 在 bin/ 目录，源码在 server/ 目录
 RUN printf '#!/bin/bash\nDIR="$(cd "$(dirname "$0")" && pwd)"\nexport LANG=zh_CN.UTF-8\nif [ ! -f "$DIR/bin/python" ]; then\n  echo "首次运行，解压运行环境..."\n  tar xzf "$DIR/py.tar.gz" -C "$DIR" 2>/dev/null || true\nfi\n"$DIR/bin/python" "$DIR/server/app.py"\n' > /dist/app/start.sh && \
     chmod +x /dist/app/start.sh
 
