@@ -1,15 +1,7 @@
 /* road-ledger custom styles */
-/* 麒麟版字体适配：添加 Linux 中文常用字体 + emoji 字体 */
-
-/* 从静态目录加载 Noto Emoji 字体（Docker 构建时下载） */
-@font-face {
-    font-family: 'Noto Emoji';
-    src: url('/static/fonts/NotoEmoji-Regular.ttf') format('truetype');
-    font-display: swap;
-}
-
+/* 麒麟版使用中文文本标签代替 emoji，系统字体即可正常显示 */
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans CJK SC", "WenQuanYi Micro Hei", "Noto Sans SC", "Noto Emoji", sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans CJK SC", "WenQuanYi Micro Hei", "Noto Sans SC", sans-serif;
 }
 
 /* sidebar */
