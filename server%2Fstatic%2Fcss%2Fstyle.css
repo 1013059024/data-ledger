@@ -1,0 +1,357 @@
+/* road-ledger custom styles */
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+}
+
+/* sidebar */
+.sidebar {
+    position: fixed;
+    top: 56px;
+    bottom: 0;
+    left: 0;
+    width: 260px;
+    overflow-y: auto;
+    background: #f8f9fa;
+    border-right: 1px solid #dee2e6;
+    padding: 0;
+}
+
+.sidebar .list-group-item {
+    border: none;
+    border-radius: 0;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    padding: 10px 16px;
+}
+
+.sidebar .list-group-item:hover {
+    background: #e9ecef;
+}
+
+.sidebar .list-group-item.active {
+    background: #0d6efd;
+    color: #fff;
+}
+
+.sidebar .table-comment {
+    font-size: 0.8em;
+    color: #6c757d;
+    margin-left: 4px;
+}
+
+.sidebar .list-group-item.active .table-comment {
+    color: rgba(255,255,255,0.8);
+}
+
+/* main content */
+.main-content {
+    margin-left: 260px;
+    padding: 20px;
+    margin-top: 56px;
+}
+
+/* table header */
+.table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.table-header h4 {
+    margin: 0;
+}
+
+/* schema info */
+.schema-section {
+    margin-bottom: 20px;
+}
+
+.schema-section .badge {
+    font-family: "Cascadia Code", "Fira Code", monospace;
+    font-size: 0.75em;
+}
+
+table.dataTable thead th {
+    background: #f8f9fa;
+    white-space: nowrap;
+    position: relative;
+    padding-right: 20px !important;
+}
+
+table.dataTable tbody tr:hover {
+    background: #f0f7ff;
+}
+
+table.dataTable tbody td {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: #6c757d;
+}
+
+.empty-state .icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+}
+
+.search-box {
+    max-width: 300px;
+}
+
+/* 记录弹窗修改标记 */
+.rec-changed { background: #fff3cd !important; }
+
+/* 表格容器滚动 */
+.main-content .table-responsive {
+    max-height: calc(100vh - 190px);
+    overflow-y: auto;
+    overflow-x: auto;
+}
+
+#dataTable {
+    table-layout: auto;
+}
+#dataTable thead th {
+    box-shadow: inset 0 -1px 0 #dee2e6;
+}
+
+/* ── 公文表格美化 ──────────────────────────────── */
+#dataTable.table-gongwen {
+    font-family: "仿宋", "FangSong", "Noto Sans SC", serif;
+    font-size: 10.5pt;
+    table-layout: auto;
+    border-collapse: collapse;
+}
+#dataTable.table-gongwen thead th {
+    font-family: "黑体", "SimHei", "Noto Sans SC", sans-serif;
+    font-weight: bold;
+    font-size: 10.5pt;
+    background: #fff;
+    border: 0.5pt solid #000;
+    text-align: center;
+    vertical-align: middle;
+    padding: 6px 10px;
+    white-space: nowrap;
+    box-shadow: none;
+}
+#dataTable.table-gongwen tbody td {
+    font-family: "仿宋", "FangSong", "Noto Sans SC", serif;
+    font-size: 10.5pt;
+    border: 0.5pt solid #000;
+    text-align: center;
+    vertical-align: middle;
+    padding: 4px 8px;
+    white-space: nowrap;
+    max-width: none;
+    text-overflow: clip;
+    overflow: visible;
+}
+/* 序号列加粗外框 */
+#dataTable.table-gongwen thead th:first-child,
+#dataTable.table-gongwen tbody td:first-child {
+    border-left: 1pt solid #000;
+}
+#dataTable.table-gongwen thead th:last-child,
+#dataTable.table-gongwen tbody td:last-child {
+    border-right: 1pt solid #000;
+}
+#dataTable.table-gongwen thead {
+    border-top: 1pt solid #000;
+    border-bottom: 0.75pt solid #000;
+}
+#dataTable.table-gongwen tbody tr:last-child td {
+    border-bottom: 1pt solid #000;
+}
+/* 表头列宽自动适应内容 */
+#dataTable.table-gongwen thead th {
+    width: auto;
+}
+#dataTable.table-gongwen thead th:first-child { width: 50px; }
+#dataTable.table-gongwen tbody td:first-child { width: 50px; }
+
+/* ── 搜索高亮 ──────────────────────────────── */
+#dataTable .search-hl {
+    background: #fff176;
+    color: #000;
+    padding: 0 1px;
+    border-radius: 2px;
+}
+
+/* 冻结表头 — sticky 固定 + 实色背景挡下方内容 */
+#dataTable thead th {
+    position: sticky !important;
+    top: 0;
+    z-index: 10;
+    background: #f8f9fa !important;
+}
+#dataTable.table-gongwen thead th {
+    position: sticky !important;
+    top: 0;
+    z-index: 10;
+}
+/* 表头底线 — 与单元格边框一致 */
+#dataTable thead th {
+    border-bottom: 1px solid #dee2e6 !important;
+}
+#dataTable.table-gongwen thead th {
+    border-bottom: 0.5pt solid #000 !important;
+}
+
+/* ── 冻结列 ──────────────────────────────── */
+#dataTable .col-frozen {
+    position: sticky !important;
+    z-index: 5;
+    background: #fff !important;
+    border-right: 2px solid #0d6efd !important;
+}
+#dataTable thead .col-frozen {
+    z-index: 11;
+    background: #f8f9fa !important;
+}
+#dataTable.table-gongwen thead .col-frozen {
+    z-index: 11;
+    background: #fff !important;
+}
+#dataTable.table-gongwen tbody .col-frozen {
+    background: #fff !important;
+}
+
+/* 选中单元格 */
+
+td.selected-cell {
+    background: #cce5ff !important;
+    outline: 2px solid #0d6efd;
+    outline-offset: -1px;
+    position: relative;
+    z-index: 1;
+}
+th.selected-header {
+    background: #d4edda !important;
+}
+/* 列选中时单元格的视觉指示（浅蓝边框，非整列填充） */
+td.col-selected {
+    background: #e8f4ff !important;
+}
+
+/* 选中行 */
+tr.row-selected td {
+    background: #fff3cd !important;
+}
+tr.row-selected td.row-num {
+    background: #ffe066 !important;
+    font-weight: bold;
+}
+
+/* 排序箭头 — 可点击 */
+.sort-arrow {
+    cursor: pointer;
+    user-select: none;
+    padding: 0 2px;
+    color: #6c757d;
+}
+.sort-arrow:hover {
+    color: #0d6efd;
+}
+.col-name {
+    cursor: pointer;
+    user-select: none;
+}
+
+/* 双击编辑输入框铺满整个单元格 */
+td.editable { position: relative; user-select: none; -webkit-user-select: none; }
+td.editable input.cell-editor,
+th.col-head input {
+    position: absolute !important;
+    top: 0 !important; left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 160px !important;
+    box-sizing: border-box !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 2px 6px !important;
+    font-size: inherit !important;
+    z-index: 1 !important;
+}
+th.col-head { position: relative; }
+
+/* 右键菜单 */
+.context-menu {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.15);
+    min-width: 150px;
+    padding: 4px 0;
+}
+.context-menu-item {
+    padding: 6px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    white-space: nowrap;
+}
+.context-menu-item:hover {
+    background: #0d6efd;
+    color: #fff;
+}
+
+/* 分组 */
+.group-header {
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid #eee;
+    background: #f0f0f0;
+}
+.group-header:hover {
+    background: #e6e6e6;
+}
+.group-toggle {
+    display: inline-block;
+    width: 14px;
+    font-size: 10px;
+}
+.group-body {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.2s ease;
+}
+.group-body.show {
+    max-height: 2000px;
+}
+.group-body .list-group-item {
+    padding-left: 28px !important;
+}
+
+.group-edit-row input {
+    font-size: 14px;
+}
+.group-assign {
+    width: auto;
+    min-width: 100px;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        width: 100%;
+        position: relative;
+        top: 0;
+        max-height: 200px;
+    }
+    .main-content {
+        margin-left: 0;
+    }
+}
