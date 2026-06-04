@@ -827,10 +827,10 @@ function colFuncToggle(){
  var sIcon="↕",sCls="text-muted";
  if(_sortField===fld){sIcon=_sortDir==="asc"?"↑":"↓";sCls="text-primary fw-bold";}
  var hasFilter=_filters[fld]&&_filters[fld].length;
- var fIcon=hasFilter?"":"▾";
+ var fIcon=hasFilter?"筛":"▾";
  var fCls=hasFilter?"text-warning":"text-muted";
  var isHidden=_hiddenCols.indexOf(fld)>=0;
- var eyeIcon=isHidden?'':'';
+ var eyeIcon=isHidden?'隐藏':'显示';
  var eyeCls=isHidden?'text-danger':'text-muted';
  // 计算当前页该字段的去重值个数
  var uniq={},cnt=0;
