@@ -1,5 +1,8 @@
 /* road-ledger custom styles */
 /* 麒麟版使用中文文本标签代替 emoji，系统字体即可正常显示 */
+/* SVG 图标与文字垂直居中 */
+svg.i { vertical-align: middle; margin-top: -2px; }
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans CJK SC", "WenQuanYi Micro Hei", "Noto Sans SC", sans-serif;
 }
