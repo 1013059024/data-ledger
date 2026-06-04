@@ -45,6 +45,30 @@ data_ledger_app.app.template_folder = os.path.join(BASE, 'templates')
 data_ledger_app.app.static_folder = os.path.join(BASE, 'static')
 data_ledger_app.app.static_url_path = '/static'
 
+# ── 端口释放 ──────────────────────────────────────
+PORT = 5000
+import subprocess
+try:
+    # 麒麟 Linux：杀掉占用 5000 端口的旧进程
+    subprocess.run(
+        ["fuser", "-k", f"{PORT}/tcp"],
+        capture_output=True, timeout=5
+    )
+    print(f"  OK 释放端口 {PORT}")
+except Exception:
+    try:
+        # 备选：lsof 方式
+        result = subprocess.run(
+            ["lsof", "-ti", f":{PORT}"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.stdout.strip():
+            pids = result.stdout.strip().split()
+            subprocess.run(["kill", "-9"] + pids, capture_output=True, timeout=5)
+            print(f"  OK 释放端口 {PORT}（lsof）")
+    except Exception:
+        print(f"  ! 无法自动释放端口 {PORT}，如启动失败请手动杀掉占用进程")
+
 # ── Run ──────────────────────────────────────────────
 if __name__ == '__main__':
     print("=" * 50)
@@ -52,6 +76,6 @@ if __name__ == '__main__':
     print(f"  Python: {sys.version.split()[0]}")
     print(f"  Base:   {BASE}")
     print(f"  Data:   {DATA_DIR}")
-    print(f"  端口:   5000")
+    print(f"  端口:   {PORT}")
     print("=" * 50)
-    data_ledger_app.app.run(host='0.0.0.0', port=5000, debug=False)
+    data_ledger_app.app.run(host='0.0.0.0', port=PORT, debug=False)
