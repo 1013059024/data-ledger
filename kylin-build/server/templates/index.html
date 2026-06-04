@@ -866,7 +866,7 @@ function colFuncToggle(){
  var fIcon=hasFilter?"◎":"▾";
  var fCls=hasFilter?"text-warning":"text-muted";
  var isHidden=_hiddenCols.indexOf(fld)>=0;
- var eyeIcon=isHidden?'✕':'◎';
+ var eyeIcon=isHidden?'<svg class=\"i\" width=\"14\" height=\"14\" viewBox=\"0 0 16 16\"><use href=\"#i-eye-off\"/></svg>':'<svg class=\"i\" width=\"14\" height=\"14\" viewBox=\"0 0 16 16\"><use href=\"#i-eye\"/></svg>';
  var eyeCls=isHidden?'text-danger':'text-muted';
  // 计算当前页该字段的去重值个数
  var uniq={},cnt=0;
