@@ -41,6 +41,7 @@ RUN cd server && \
     --hidden-import openpyxl.styles \
     --hidden-import openpyxl.utils \
     --collect-all openpyxl \
+    --collect-all xlrd \
     pyi_entry.py
 
 # ── 输出阶段 ──
