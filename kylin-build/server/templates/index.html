@@ -590,7 +590,8 @@ $(document).on("click",".col-func-eye",function(e){
  else _hiddenCols.push(fld);
  // 即时更新菜单中的图标
  var isHidden=_hiddenCols.indexOf(fld)>=0;
- $(this).text(isHidden?'':'').toggleClass("text-danger",isHidden).toggleClass("text-muted",!isHidden);
+ var eyeHtml=isHidden?'<svg class=\"i\" width=\"14\" height=\"14\" viewBox=\"0 0 16 16\"><use href=\"#i-eye-off\"/></svg>':'<svg class=\"i\" width=\"14\" height=\"14\" viewBox=\"0 0 16 16\"><use href=\"#i-eye\"/></svg>';
+ $(this).html(eyeHtml).toggleClass("text-danger",isHidden).toggleClass("text-muted",!isHidden);
  // 发请求
  var url=idx>=0?"/api/table/"+encodeURIComponent(ct)+"/column/unhide":"/api/table/"+encodeURIComponent(ct)+"/column/hide";
  $.ajax({url:url,type:"POST",contentType:"application/json",
