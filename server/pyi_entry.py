@@ -52,6 +52,25 @@ data_ledger_app.app.template_folder = os.path.join(BASE, 'templates')
 data_ledger_app.app.static_folder = os.path.join(BASE, 'static')
 data_ledger_app.app.static_url_path = '/static'
 
+# ── 端口释放 ──────────────────────────────────────
+PORT = 5000
+import subprocess
+try:
+    # Windows：用 netstat 查找占用端口的 PID
+    result = subprocess.run(
+        ["netstat", "-ano"], capture_output=True, text=True, timeout=5
+    )
+    for line in result.stdout.splitlines():
+        if f":{PORT}" in line and ("LISTENING" in line or "ESTABLISHED" in line):
+            parts = line.strip().split()
+            if parts:
+                pid = parts[-1]
+                subprocess.run(["taskkill", "/PID", pid, "/F"], capture_output=True, timeout=5)
+                print(f"  OK 释放端口 {PORT}（PID {pid}）")
+                break
+except Exception:
+    print(f"  ! 无法自动释放端口 {PORT}，请手动关闭占用 5000 端口的程序")
+
 # ── Run ──────────────────────────────────────────────
 if __name__ == '__main__':
     print("=" * 50)
