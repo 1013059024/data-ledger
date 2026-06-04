@@ -34,8 +34,13 @@ RUN cd server && \
     --name data-ledger \
     --add-data "templates:templates" \
     --add-data "static:static" \
+    --add-data "static/fonts/NotoEmoji-Regular.ttf:static/fonts" \
     --hidden-import openpyxl \
     --hidden-import xlrd \
+    --hidden-import decimal \
+    --hidden-import openpyxl.styles \
+    --hidden-import openpyxl.utils \
+    --collect-all openpyxl \
     pyi_entry.py
 
 # ── 输出阶段 ──
