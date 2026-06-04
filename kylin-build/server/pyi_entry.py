@@ -47,27 +47,49 @@ data_ledger_app.app.static_url_path = '/static'
 
 # ── 端口释放 ──────────────────────────────────────
 PORT = 5000
-import subprocess
-try:
-    # 麒麟 Linux：杀掉占用 5000 端口的旧进程
-    subprocess.run(
-        ["fuser", "-k", f"{PORT}/tcp"],
-        capture_output=True, timeout=5
-    )
-    print(f"  OK 释放端口 {PORT}")
-except Exception:
+def _free_port(port):
+    """尝试多种方式释放端口"""
+    import subprocess
+    cmds = [
+        ["fuser", "-k", f"{port}/tcp"],
+        ["lsof", "-ti", f":{port}"],
+    ]
+    for cmd in cmds:
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if cmd[0] == "fuser":
+                if result.returncode == 0:
+                    print(f"  OK 释放端口 {port}（fuser）")
+                    return
+            else:
+                pids = result.stdout.strip().split()
+                if pids:
+                    subprocess.run(["kill", "-9"] + pids, capture_output=True, timeout=5)
+                    print(f"  OK 释放端口 {port}（kill {pids}）")
+                    return
+        except Exception:
+            pass
+    # 备选：通过 /proc/net/tcp 查找
     try:
-        # 备选：lsof 方式
-        result = subprocess.run(
-            ["lsof", "-ti", f":{PORT}"],
-            capture_output=True, text=True, timeout=5
-        )
-        if result.stdout.strip():
-            pids = result.stdout.strip().split()
-            subprocess.run(["kill", "-9"] + pids, capture_output=True, timeout=5)
-            print(f"  OK 释放端口 {PORT}（lsof）")
+        with open("/proc/net/tcp") as f:
+            for line in f:
+                cols = line.strip().split()
+                if len(cols) < 10: continue
+                local = cols[1]
+                if local.endswith(f":{port:04X}"):
+                    pid_hex = cols[9]
+                    if pid_hex != "0":
+                        pid = int(pid_hex, 16)
+                        subprocess.run(["kill", "-9", str(pid)], capture_output=True, timeout=5)
+                        print(f"  OK 释放端口 {port}（/proc/net/tcp pid={pid}）")
+                        return
     except Exception:
-        print(f"  ! 无法自动释放端口 {PORT}，如启动失败请手动杀掉占用进程")
+        pass
+    print(f"  ! 无法自动释放端口 {port}，请在麒麟终端执行：")
+    print(f"    sudo ss -tlnp | grep {port}")
+    print(f"    找到 PID 后用 kill -9 <PID> 杀掉")
+
+_free_port(PORT)
 
 # ── Run ──────────────────────────────────────────────
 if __name__ == '__main__':
