@@ -16,39 +16,75 @@
 .filter-values{max-height:240px;overflow-y:auto}
 .filter-tag:hover{border-color:#e6a800!important;background:#fff8e1!important}
 </style></head>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <!-- 映射 -->
+  <symbol id="i-map" viewBox="0 0 16 16"><path d="M3 2v12l4-2 2 2 4-2V2l-4 2-2-2-4 2z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5" cy="4" r="1" fill="currentColor"/><circle cx="9" cy="4" r="1" fill="currentColor"/></symbol>
+  <!-- 数据库 -->
+  <symbol id="i-db" viewBox="0 0 16 16"><ellipse cx="8" cy="4" rx="6" ry="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M2 4v8c0 1.1 2.7 2 6 2s6-.9 6-2V4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M2 8c0 1.1 2.7 2 6 2s6-.9 6-2" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <!-- 上传 -->
+  <symbol id="i-upload" viewBox="0 0 16 16"><path d="M8 2v9M4 6l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12v2h12v-2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <!-- 下载 -->
+  <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 14V5M4 9l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12v2h12v-2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <!-- 筛选 -->
+  <symbol id="i-filter" viewBox="0 0 16 16"><path d="M2 3h12M5 8h6M8 13h0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="13" r="1.5" fill="currentColor"/></symbol>
+  <!-- 列功能 -->
+  <symbol id="i-list" viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <!-- 编辑/补填 -->
+  <symbol id="i-edit" viewBox="0 0 16 16"><path d="M11 2l3 3-8 8-3-8 8-3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M11 2l3 3" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <!-- 合并 -->
+  <symbol id="i-merge" viewBox="0 0 16 16"><path d="M3 8h10M8 3v10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <!-- 删除 -->
+  <symbol id="i-delete" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <!-- 刷新 -->
+  <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13 8a5 5 0 0 1-9 3M3 8a5 5 0 0 1 9-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M13 4v4h-4M3 12V8h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <!-- 查看/眼睛 -->
+  <symbol id="i-eye" viewBox="0 0 16 16"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <!-- 眼睛关闭 -->
+  <symbol id="i-eye-off" viewBox="0 0 16 16"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 4l8 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <!-- 应用/确认 -->
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8l4 4 6-7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <!-- 设置 -->
+  <symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.5 3.5l1.5 1.5M11 11l1.5 1.5M14.5 3.5l-1.5 1.5M5 11l-1.5 1.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <!-- 添加 -->
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M3 8h10M8 3v10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <!-- 备份/保存 -->
+  <symbol id="i-save" viewBox="0 0 16 16"><path d="M3 14V2h8l3 3v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 2v4h5V2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="10" r="2" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <!-- 回收站 -->
+  <symbol id="i-trash" viewBox="0 0 16 16"><path d="M2 4h12M5 4V2h6v2M12 6l-1 8H5L4 6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
 <body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
 <div class="container-fluid">
 <a class="navbar-brand" href="/"> 数据台账系统</a>
 <span class="navbar-text text-white-50 small"><span id="tableCount" class="badge bg-light text-primary">0 张表</span> <span id="saveStatus" class="badge bg-success ms-1" style="cursor:default" title="数据已保存到数据库"> 已保存</span></span>
 <div class="ms-auto d-flex gap-2">
-<button class="btn btn-outline-light btn-sm" id="syncBtn">↗ 映射</button>
-<button class="btn btn-outline-light btn-sm" id="dbViewBtn">⛁ 数据库</button>
-<button class="btn btn-light btn-sm" id="uploadBtn">↑ 导入</button>
-<button class="btn btn-outline-light btn-sm" id="dbBackupBtn">↓ 备份</button>
+<button class="btn btn-outline-light btn-sm" id="syncBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-map"/></svg> 映射</button>
+<button class="btn btn-outline-light btn-sm" id="dbViewBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-db"/></svg> 数据库</button>
+<button class="btn btn-light btn-sm" id="uploadBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-upload"/></svg> 导入</button>
+<button class="btn btn-outline-light btn-sm" id="dbBackupBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-save"/></svg> 备份</button>
 </div></div></nav>
-<div class="sidebar"><div class="p-3 border-bottom bg-light d-flex justify-content-between align-items-center"><h6 class="mb-0 fw-bold"> 数据表</h6><div class="d-flex gap-1"><button class="btn btn-sm btn-outline-primary" id="createTableBtn" title="新建表格">＋新建</button><button class="btn btn-sm btn-outline-secondary" id="groupManageBtn" title="管理分组">⚙ 管理</button><button class="btn btn-sm btn-outline-danger" id="recycleBinBtn" title="回收站">✕ 删除</button></div></div>
+<div class="sidebar"><div class="p-3 border-bottom bg-light d-flex justify-content-between align-items-center"><h6 class="mb-0 fw-bold"> 数据表</h6><div class="d-flex gap-1"><button class="btn btn-sm btn-outline-primary" id="createTableBtn" title="新建表格"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-plus"/></svg> 新建</button><button class="btn btn-sm btn-outline-secondary" id="groupManageBtn" title="管理分组"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-gear"/></svg></button><button class="btn btn-sm btn-outline-danger" id="recycleBinBtn" title="回收站"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-trash"/></svg></button></div></div>
 <div class="list-group list-group-flush" id="tableList"><div class="text-center text-muted py-4 spinner-border spinner-border-sm"></div></div></div>
 <div class="main-content">
-<div class="empty-state" id="emptyState"><div class="icon"></div><h5>还没有数据表</h5><p class="text-muted">点击左侧 <strong>「＋新建」</strong> 或者右上角 <strong>「 导入」</strong></p></div>
+<div class="empty-state" id="emptyState"><div class="icon"></div><h5><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-db"/></svg> 还没有数据表</h5><p class="text-muted">点击左侧 <strong>「＋新建」</strong> 或者右上角 <strong>「 导入」</strong></p></div>
 <div id="tableView" style="display:none">
 <div class="d-flex justify-content-between align-items-center mb-3">
 <div><h4 class="mb-0"><span id="tableName"></span>
-<button class="btn btn-sm btn-outline-secondary ms-2" id="renameTableBtn">✎ 重命名</button><button class="btn btn-sm btn-outline-danger ms-1" id="deleteTableBtn">✕ 删除</button></h4>
+<button class="btn btn-sm btn-outline-secondary ms-2" id="renameTableBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-edit"/></svg></button><button class="btn btn-sm btn-outline-danger ms-1" id="deleteTableBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-trash"/></svg></button></h4>
 <span class="text-muted small" id="totalRecords"></span>
 <span class="text-muted small ms-3"> <span id="keyFieldDisplay">—</span></span></div>
 <div class="d-flex gap-2"><input type="text" id="searchInput" class="form-control form-control-sm" placeholder="搜索..." style="width:200px">
-<button class="btn btn-sm btn-outline-warning" id="clearAllFiltersBtn" style="display:none" title="清除所有筛选">△ 筛选</button>
-<button class="btn btn-sm btn-outline-success" id="exportBtn">↓ 导出</button>
+<button class="btn btn-sm btn-outline-warning" id="clearAllFiltersBtn" style="display:none" title="清除所有筛选"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-filter"/></svg> 筛选</button>
+<button class="btn btn-sm btn-outline-success" id="exportBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-download"/></svg> 导出</button>
 <div id="colFuncWrap" style="position:relative">
-<button class="btn btn-sm btn-outline-secondary" id="colFuncBtn">☰ 列功能</button>
+<button class="btn btn-sm btn-outline-secondary" id="colFuncBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-list"/></svg> 列功能</button>
 <ul id="colFuncMenu" style="display:none;position:absolute;inset:0 0 auto auto;margin:0;padding:4px 0;background:#fff;border:1px solid rgba(0,0,0,0.15);border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,0.15);z-index:1050;max-height:400px;overflow-y:auto;min-width:280px;font-size:13px;list-style:none"></ul></div>
-<button class="btn btn-sm btn-outline-info" id="backfillBtn">✎ 补填</button>
+<button class="btn btn-sm btn-outline-info" id="backfillBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-edit"/></svg> 补填</button>
 
-<button class="btn btn-sm btn-outline-primary" id="aggregateBtn">⊞ 合并</button>
-<button class="btn btn-sm btn-outline-primary" id="groupSummaryBtn">⊞ 汇总</button>
-<button class="btn btn-sm btn-outline-danger" id="dedupBtn">✕ 去重</button>
-<button class="btn btn-sm btn-outline-secondary" id="refreshBtn">⟳ 刷新</button></div></div>
+<button class="btn btn-sm btn-outline-primary" id="aggregateBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-merge"/></svg> 合并</button>
+<button class="btn btn-sm btn-outline-primary" id="groupSummaryBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-merge"/></svg> 汇总</button>
+<button class="btn btn-sm btn-outline-danger" id="dedupBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-delete"/></svg> 去重</button>
+<button class="btn btn-sm btn-outline-secondary" id="refreshBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-refresh"/></svg></button></div></div>
 <div id="filterTags" style="display:none;margin-bottom:6px;padding:4px 0;min-height:28px"></div>
 <div class="table-responsive"><table class="table table-bordered table-hover table-sm" id="dataTable" style="border-collapse:collapse"><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table></div>
 <div id="selectionBar" style="display:none;padding:3px 8px;font-size:12px;color:#666;background:#fafafa;border:1px solid #dee2e6;border-top:0;border-radius:0 0 4px 4px;min-height:22px"><span id="selInfo"></span></div>
@@ -113,7 +149,7 @@
 <div class="col-md-3"><button class="btn btn-sm btn-outline-success w-100" id="syncLoadPairsBtn">⟳ 加载字段对</button></div></div>
 <div id="syncPairs"></div>
 <div class="d-flex justify-content-between align-items-center mt-2">
- <button class="btn btn-sm btn-outline-warning" id="syncVerifyBtn">◎ 核实</button>
+ <button class="btn btn-sm btn-outline-warning" id="syncVerifyBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-eye"/></svg> 核实</button>
  <div id="syncVerifySummary" class="small"></div>
 </div>
 <button class="btn btn-sm btn-outline-secondary" id="syncCancelEdit" style="display:none">取消编辑</button>
@@ -219,7 +255,7 @@
 <div class="modal-body">
  <div class="alert alert-info small">导出整个数据库为单一 JSON 文件，可随时恢复。</div>
  <div class="d-grid gap-2">
- <button class="btn btn-primary btn-lg" id="exportDbBtn">↓ 备份数据库</button>
+ <button class="btn btn-primary btn-lg" id="exportDbBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-download"/></svg> 备份数据库</button>
  <div class="text-center text-muted small my-1">或</div>
  <label class="btn btn-outline-primary btn-lg" for="importDbInput" style="cursor:pointer"> 导入数据库（从备份文件恢复）</label>
  <input type="file" id="importDbInput" accept=".json" style="display:none">
@@ -340,7 +376,7 @@ $("#groupManageBtn").click(function(){
  +'<button class="btn btn-sm btn-outline-danger ms-1 del-group" data-idx="'+i+'"></button></div>'
  +'<div class="small text-muted">包含 '+((g.tables||[]).length)+' 张表</div></div>';
  });
- html+='<button class="btn btn-sm btn-outline-primary w-100" id="addGroupBtn">+ 添加分组</button>';
+ html+='<button class="btn btn-sm btn-outline-primary w-100" id="addGroupBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-plus"/></svg> 添加分组</button>';
  html+='<hr><h6>分配表到分组</h6>';
  var assigned={};
  _groups.forEach(function(g){(g.tables||[]).forEach(function(t){assigned[t]=g.name;});});
@@ -1031,7 +1067,7 @@ function updateShowAllBanner(){
  if(!$("#showAllBanner").length){
  var $b=$('<div id="showAllBanner" class="alert alert-warning d-flex align-items-center justify-content-between py-2 mb-2 small" style="margin-top:-12px">'
  +'<span> 显示全部记录（含隐藏/删除）— 共 <strong id="showAllCount"></strong> 条</span>'
- +'<button class="btn btn-sm btn-outline-dark" id="exitShowAllBtn">✕ 退出</button></div>');
+ +'<button class="btn btn-sm btn-outline-dark" id="exitShowAllBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-delete"/></svg> 退出</button></div>');
  $(".table-responsive").before($b);
  }
  }else{
@@ -1212,7 +1248,7 @@ function loadRecycleBin(){
  if(!r.data||r.data.length===0){
  $("#recycleBinList").html('<div class="text-center text-muted py-4">暂无备份</div>');return;
  }
- var h='<div class="mb-2 d-flex gap-2"><button class="btn btn-sm btn-success" id="batchRestoreBtn">↩ 批量恢复</button><button class="btn btn-sm btn-danger" id="batchDeleteBtn">✕ 批量删除</button><span class="text-muted small align-self-center ms-2">勾选后点击操作按钮</span></div>';
+ var h='<div class="mb-2 d-flex gap-2"><button class="btn btn-sm btn-success" id="batchRestoreBtn">↩ 批量恢复</button><button class="btn btn-sm btn-danger" id="batchDeleteBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-delete"/></svg> 批量删除</button><span class="text-muted small align-self-center ms-2">勾选后点击操作按钮</span></div>';
  h+='<div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr><th style="width:40px"><input type="checkbox" id="rbSelectAll"></th><th>表名</th><th>备份时间</th><th>记录数</th><th>大小</th></tr></thead><tbody>';
  r.data.forEach(function(b){
  h+='<tr><td><input type="checkbox" class="rb-cb" value="'+b.filename+'" data-table="'+b.table+'"></td>'+
@@ -1399,7 +1435,7 @@ $("#rowMenu").on("click",".context-menu-item",function(e){
  return;
  }
  if(action==="insert"){if(!ct){alert("当前表名为空");return;}console.log("insert into:",ct);$.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/row",type:"POST",success:function(r){console.log("insert ok:",r);if(r.code===0){fp(ct,1);$.getJSON("/api/tables",function(rt){if(rt.code===0)$("#tableCount").text(rt.data.length+" 张表");});}else alert(r.msg);},error:function(xhr){alert("插入失败 状态:"+xhr.status);}});}
- if(action==="view-record"&&rid){$.getJSON("/api/table/"+encodeURIComponent(ct)+"/record/"+rid,function(r){if(r.code===0){var g=r.data.groups,ch={},h='';g.forEach(function(grp){h+='<div class="mb-2"><strong class="text-primary small"> '+grp.table+'</strong><table class="table table-sm table-bordered mb-0 mt-1" data-table="'+grp.table+'" data-id="'+grp.id+'"><thead><tr><th style="width:30%">字段名</th><th>字段值</th></tr></thead><tbody>';for(var f in grp.fields){var v=grp.fields[f];h+='<tr><td class="text-muted small">'+f+'</td><td class="rec-val" data-table="'+grp.table+'" data-id="'+grp.id+'" data-field="'+f+'">'+(v||'')+'</td></tr>';}h+='</tbody></table></div>';});h+='<div class="d-flex gap-2"><button class="btn btn-primary btn-sm" id="applyRecordBtn">✓ 应用</button><span id="recordStatus" class="small align-self-center"></span></div>';$("#recordContent").html(h);_recordChanges={};$("#applyRecordBtn").click(function(){var ups=[];for(var k in _recordChanges){var u=_recordChanges[k];ups.push({table:u.table,id:u.id,field:u.field,value:u.val});}if(!ups.length){$("#recordStatus").text("无修改");return;}$("#applyRecordBtn").prop("disabled",true);$("#recordStatus").text("提交中...");$.ajax({url:"/api/table/batch-update",type:"POST",contentType:"application/json",data:JSON.stringify({updates:ups}),success:function(r2){$("#recordStatus").text(r2.msg);if(r2.code===0){_recordChanges={};$(".rec-changed").removeClass("rec-changed");if(ct)fp(ct,cp);}setTimeout(function(){$("#recordStatus").text("");},3000);},complete:function(){$("#applyRecordBtn").prop("disabled",false);}});});(new bootstrap.Modal(document.getElementById("recordModal"))).show();}});}
+ if(action==="view-record"&&rid){$.getJSON("/api/table/"+encodeURIComponent(ct)+"/record/"+rid,function(r){if(r.code===0){var g=r.data.groups,ch={},h='';g.forEach(function(grp){h+='<div class="mb-2"><strong class="text-primary small"> '+grp.table+'</strong><table class="table table-sm table-bordered mb-0 mt-1" data-table="'+grp.table+'" data-id="'+grp.id+'"><thead><tr><th style="width:30%">字段名</th><th>字段值</th></tr></thead><tbody>';for(var f in grp.fields){var v=grp.fields[f];h+='<tr><td class="text-muted small">'+f+'</td><td class="rec-val" data-table="'+grp.table+'" data-id="'+grp.id+'" data-field="'+f+'">'+(v||'')+'</td></tr>';}h+='</tbody></table></div>';});h+='<div class="d-flex gap-2"><button class="btn btn-primary btn-sm" id="applyRecordBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-check"/></svg> 应用</button><span id="recordStatus" class="small align-self-center"></span></div>';$("#recordContent").html(h);_recordChanges={};$("#applyRecordBtn").click(function(){var ups=[];for(var k in _recordChanges){var u=_recordChanges[k];ups.push({table:u.table,id:u.id,field:u.field,value:u.val});}if(!ups.length){$("#recordStatus").text("无修改");return;}$("#applyRecordBtn").prop("disabled",true);$("#recordStatus").text("提交中...");$.ajax({url:"/api/table/batch-update",type:"POST",contentType:"application/json",data:JSON.stringify({updates:ups}),success:function(r2){$("#recordStatus").text(r2.msg);if(r2.code===0){_recordChanges={};$(".rec-changed").removeClass("rec-changed");if(ct)fp(ct,cp);}setTimeout(function(){$("#recordStatus").text("");},3000);},complete:function(){$("#applyRecordBtn").prop("disabled",false);}});});(new bootstrap.Modal(document.getElementById("recordModal"))).show();}});}
 
 $(document).on("dblclick",".rec-val",function(){var td=$(this);if(td.find("input").length)return;var v=td.text(),tbl=td.data("table"),rid=td.data("id"),fld=td.data("field");td.html('<input type="text" class="form-control form-control-sm" value="'+v.replace(/"/g,"&quot;")+'">');var inp=td.find("input");inp.focus();inp.select();inp.on("blur",function(){var nv=inp.val();if(nv!==v){_recordChanges[tbl+"_"+rid+"_"+fld]={table:tbl,id:rid,field:fld,val:nv};td.addClass("rec-changed");}td.html(nv);});inp.on("keydown",function(e){if(e.key==="Enter")inp.blur();if(e.key==="Escape")td.html(v);});});
 $(document).on("click",".rec-val",function(){$("#rowMenu,#colMenu").hide();});
