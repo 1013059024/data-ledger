@@ -317,7 +317,7 @@ var _groups=[],_allTables=[];
 
 function lt(sn){
  $.getJSON("/api/tables",function(r){
- if(r.code)return;
+ if(r.code){$("#tableList").html('<div class="text-center text-muted py-4">加载失败</div>');return;}
  _allTables=r.data;
  if(!_allTables.length){
  $("#tableList").html('<div class="text-center text-muted py-4">暂无</div>');
@@ -327,8 +327,8 @@ function lt(sn){
  $.getJSON("/api/table-groups",function(gr){
  if(gr.code===0)_groups=gr.data;
  renderSidebar(sn);
- });
- });
+ }).fail(function(){$("#tableList").html('<div class="text-center text-muted py-4">加载失败</div>');});
+ }).fail(function(){$("#tableList").html('<div class="text-center text-muted py-4">无法连接服务器</div>');});
 }
 
 function renderSidebar(sn){
