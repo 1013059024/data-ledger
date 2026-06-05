@@ -38,6 +38,7 @@ sys.path.insert(0, BASE)
 os.makedirs(os.path.join(DATA_DIR, "data"), exist_ok=True)
 
 import app as data_ledger_app
+import routes_column  # 列操作路由（侧边导入，注册到 app）
 
 # Override Flask's template/static folders to point at the extracted bundle
 data_ledger_app.app.root_path = BASE
