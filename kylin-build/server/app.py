@@ -332,7 +332,7 @@ def api_add_row(table_name):
     if not fields: return jsonify({"code": 1, "msg": "无可用字段"})
     cols = ", ".join([f"`{f}`" for f in fields])
     try:
-        from db import get_conn
+        from db import _get_conn as get_conn
         conn = get_conn()
         try:
             with conn.cursor() as cur:
