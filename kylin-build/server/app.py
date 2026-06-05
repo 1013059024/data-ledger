@@ -14,6 +14,7 @@ _DATA_DIR = os.environ.get('DATA_LEDGER_DATA') or os.path.dirname(__file__)
 _MAP_FILE = os.path.join(_DATA_DIR, "_sync_mappings.json")
 _GROUP_FILE = os.path.join(_DATA_DIR, "_table_groups.json")
 _KF_FILE = os.path.join(_DATA_DIR, "_key_fields.json")
+_AGG_FILE = os.path.join(_DATA_DIR, "_agg_sources.json")
 _BACKUP_DIR = os.path.join(_DATA_DIR, "_backup")
 _DEL_TOKEN = os.urandom(8).hex()  # 每次启动随机生成，只有页面知道
 
@@ -46,6 +47,16 @@ def _load_kf():
 
 def _save_kf(kf):
     with open(_KF_FILE, "w", encoding="utf-8") as f: json.dump(kf, f, ensure_ascii=False, indent=2)
+
+
+def _load_agg():
+    if not os.path.exists(_AGG_FILE): return {}
+    try:
+        with open(_AGG_FILE, encoding="utf-8") as f: return json.load(f)
+    except: return {}
+
+def _save_agg(agg):
+    with open(_AGG_FILE, "w", encoding="utf-8") as f: json.dump(agg, f, ensure_ascii=False, indent=2)
 
 
 # ── 自动备份 ──────────────────────────────────────────
@@ -1152,6 +1163,67 @@ def api_clipboard_status():
 
 
 # ========== 多表汇总 ==========
+
+@app.route("/api/agg-source/save", methods=["POST"])
+def api_save_agg_source():
+    """记录汇总来源"""
+    d = request.get_json()
+    tn = (d or {}).get("table", "").strip()
+    src = (d or {}).get("source", "").strip()
+    gf = (d or {}).get("group_field", "").strip()
+    sfs = (d or {}).get("sum_fields", [])
+    if not tn or not src: return jsonify({"code": 1, "msg": "参数不足"})
+    agg = _load_agg()
+    agg[tn] = {"source": src, "group_field": gf, "sum_fields": sfs}
+    _save_agg(agg)
+    return jsonify({"code": 0})
+
+
+@app.route("/api/table/<table_name>/agg-source", methods=["GET"])
+def api_get_agg_source(table_name):
+    """获取汇总表的来源信息"""
+    agg = _load_agg()
+    info = agg.get(table_name)
+    if info:
+        return jsonify({"code": 0, "data": info})
+    return jsonify({"code": 1, "msg": "非汇总表"})
+
+
+@app.route("/api/table/<table_name>/agg-recalc", methods=["POST"])
+def api_agg_recalc(table_name):
+    """重新计算汇总表数据"""
+    agg = _load_agg()
+    info = agg.get(table_name)
+    if not info:
+        return jsonify({"code": 1, "msg": "非汇总表"})
+    source = info.get("source")
+    gf = info.get("group_field")
+    sfs = info.get("sum_fields")
+    if not source or not gf or not sfs:
+        return jsonify({"code": 1, "msg": "汇总信息不完整"})
+    try:
+        from db import get_schema, query, execute
+        src_schema = get_schema(source)
+        if not src_schema: return jsonify({"code": 1, "msg": f"源表 '{source}' 不存在"})
+        tgt_schema = get_schema(table_name)
+        if not tgt_schema: return jsonify({"code": 1, "msg": f"汇总表 '{table_name}' 不存在"})
+        # 执行汇总查询
+        sum_cols = ", ".join([f'SUM("{sf}") AS "{sf}"' for sf in sfs])
+        sql = f'SELECT "{gf}", {sum_cols} FROM "{source}" WHERE "_deleted" IS NULL GROUP BY "{gf}" ORDER BY "{gf}"'
+        rows = query(sql)
+        # 清空汇总表数据并重新插入
+        execute(f'DELETE FROM "{table_name}" WHERE 1=1')
+        for row in rows:
+            cols = ", ".join([f'"{c}"' for c in [gf] + sfs])
+            ph = ", ".join(["?"] * (len(sfs) + 1))
+            vals = [row.get(gf, "")]
+            for sf in sfs:
+                vals.append(row.get(sf) or 0)
+            execute(f'INSERT INTO "{table_name}" ({cols}) VALUES ({ph})', vals)
+        return jsonify({"code": 0, "msg": f"已从 '{source}' 重新汇总，共 {len(rows)} 行"})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"重新汇总失败: {str(e)}"})
+
 
 @app.route("/api/table/<table_name>/aggregate-inline", methods=["POST"])
 def api_aggregate_inline(table_name):
