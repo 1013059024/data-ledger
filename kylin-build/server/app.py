@@ -332,16 +332,13 @@ def api_add_row(table_name):
     if not fields: return jsonify({"code": 1, "msg": "无可用字段"})
     cols = ", ".join([f"`{f}`" for f in fields])
     try:
-        from db import _get_conn as get_conn
-        conn = get_conn()
-        try:
-            with conn.cursor() as cur:
-                cur.execute(f"INSERT INTO `{table_name}` ({cols}) VALUES ({', '.join(['NULL']*len(fields))})")
-                conn.commit()
-                new_id = cur.lastrowid
-            return jsonify({"code": 0, "msg": "已添加", "id": new_id})
-        finally:
-            conn.close()
+        from db import execute, query_one
+        sql = f"INSERT INTO `{table_name}` ({cols}) VALUES ({', '.join(['%s']*len(fields))})"
+        execute(sql)
+        pk = get_pk_column(table_name) or "id"
+        new_row = query_one(f"SELECT MAX(`{pk}`) as new_id FROM `{table_name}`")
+        new_id = new_row["new_id"] if new_row else 0
+        return jsonify({"code": 0, "msg": "已添加", "id": new_id})
     except Exception as e:
         return jsonify({"code": 1, "msg": f"添加失败: {e}"})
 
