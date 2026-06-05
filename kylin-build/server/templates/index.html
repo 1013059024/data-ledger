@@ -1736,10 +1736,10 @@ function selCols(){return $("#tableBody tr:first td.editable").length||1;}
 
 function updateSelectionStats(){
  var $bar=$("#selectionBar"),$info=$("#selInfo");
- var cells=_sel&&_sel.cells?$(_sel.cells).filter(function(){return this.closest("tr")&&$(this).closest("tr").data("id");}).get():[];
+ var cells=_sel&&_sel.cells?$(_sel.cells).filter(function(){return this.closest("tr")&&$(this).closest("tr").data("id")&&_hiddenCols.indexOf($(this).data("field"))<0;}).get():[];
  // Also count column selection if no cell selection
  if(!cells.length&&_colSel&&_colSel.cols.length){
- var cid="";cells=[];$("#tableBody td.editable").each(function(){
+ var cid="";cells=[];$("#tableBody td.editable:visible").each(function(){
  if(_colSel.cols.indexOf($(this).data("field"))>=0&&cid!==($(this).closest("tr").data("id")||"")){
  cid=$(this).closest("tr").data("id")||"";
  cells.push(this);
