@@ -89,6 +89,13 @@
 <div id="filterTags" style="display:none;margin-bottom:6px;padding:4px 0;min-height:28px"></div>
 <div class="table-responsive"><table class="table table-bordered table-hover table-sm" id="dataTable" style="border-collapse:collapse"><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table></div>
 <div id="selectionBar" style="display:none;padding:3px 8px;font-size:12px;color:#666;background:#fafafa;border:1px solid #dee2e6;border-top:0;border-radius:0 0 4px 4px;min-height:22px"><span id="selInfo"></span></div>
+<div id="aggBar" style="display:none;padding:6px 12px;font-size:13px;background:#fff8e1;border:1px solid #ffe082;border-top:0;border-radius:0 0 4px 4px">
+ <span id="aggBarInfo"></span>
+ <div class="float-end">
+ <button class="btn btn-sm btn-outline-success me-1" id="aggSaveBtn"> 存为新表</button>
+ <button class="btn btn-sm btn-outline-secondary" id="aggCancelBtn">✕ 取消汇总</button>
+ </div>
+</div>
 <!-- 筛选下拉面板 -->
 <div id="filterDropdown" class="filter-dropdown" style="display:none">
  <div class="filter-dropdown-header">
@@ -218,27 +225,33 @@
 <div class="modal fade" id="groupSummaryModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
 <div class="modal-header"><h5 class="modal-title"> 分类汇总</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 <div class="modal-body">
- <div class="alert alert-info small">按所选字段分组，对指定字段计数或求和，结果存为新表。</div>
+ <div class="alert alert-info small">按所选字段分组，对指定字段求和，结果可在本表下方显示或存为新表。</div>
  <div class="mb-3"><label class="form-label fw-bold">① 分组字段</label>
  <select class="form-select" id="gsGroupField"><option value="">— 选择 —</option></select>
  </div>
- <div class="mb-3"><label class="form-label fw-bold">② 汇总项</label>
+ <div class="mb-3"><label class="form-label fw-bold">② 汇总字段（求和）</label>
  <div id="gsAggList" class="border rounded p-2 mb-2" style="min-height:60px">
- <div class="text-muted small" id="gsNoAgg">暂无汇总项，点击下方添加</div>
+ <div class="text-muted small" id="gsNoAgg">暂无汇总字段</div>
  </div>
  <div class="row g-2 align-items-center">
- <div class="col-md-5"><select class="form-select form-select-sm" id="gsAggField"><option value="">选择字段</option></select></div>
- <div class="col-md-3"><select class="form-select form-select-sm" id="gsAggType"><option value="count">计数</option><option value="sum">求和</option></select></div>
- <div class="col-md-4"><input type="text" class="form-control form-control-sm" id="gsAggAlias" placeholder="别名（可选）"></div>
+ <div class="col-md-8"><select class="form-select form-select-sm" id="gsAggField"><option value="">选择数值字段</option></select></div>
+ <div class="col-md-4"><input type="text" class="form-control form-control-sm" id="gsAggAlias" placeholder="别名"></div>
  </div>
- <button class="btn btn-sm btn-outline-primary mt-2" id="gsAddAgg">＋ 添加汇总项</button>
+ <button class="btn btn-sm btn-outline-primary mt-2" id="gsAddAgg">＋ 添加汇总字段</button>
  </div>
- <div class="mb-2"><label class="form-label fw-bold">③ 新表名称</label>
+ <div class="mb-2">
+ <label class="form-label fw-bold">③ 显示方式</label>
+ <div class="d-flex gap-3">
+ <div class="form-check"><input class="form-check-input" type="radio" name="gsMode" id="gsModeNew" value="new" checked><label class="form-check-label" for="gsModeNew"> 存为新表</label></div>
+ <div class="form-check"><input class="form-check-input" type="radio" name="gsMode" id="gsModeInline" value="inline"><label class="form-check-label" for="gsModeInline"> 本表下方显示</label></div>
+ </div>
+ </div>
+ <div class="mb-2" id="gsNewNameWrap"><label class="form-label fw-bold">④ 新表名称</label>
  <input type="text" class="form-control" id="gsTableName" placeholder="自动生成">
  </div>
  <div id="gsResult" class="mt-2"></div>
 </div>
-<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" id="gsConfirmBtn" disabled>生成汇总表</button></div>
+<div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" id="gsConfirmBtn" disabled>确认</button></div>
 </div></div></div>
 
 <div id="rowMenu" class="context-menu"><div class="context-menu-item" data-action="copy-selection"> 复制选中区域</div><div class="context-menu-item" data-action="paste-to-selection"> 粘贴</div><div class="context-menu-item" data-action="clear-selection"> 清除内容</div><hr class="my-1"><div class="context-menu-item" data-action="insert"> 插入空行</div><div class="context-menu-item" data-action="view-record"> 查看数据库记录</div><hr class="my-1"><div class="context-menu-item" data-action="hide-row"> 从本表隐藏</div><div class="context-menu-item" data-action="table-delete"> 从本表删除</div><div class="context-menu-item" data-action="delete-row"> 从数据库删除</div></div>
@@ -466,6 +479,8 @@ function evalFormula(expr,rowData){
 }
 function loadTable(n){ct=n;cp=1;_showAllRows=false;$("#emptyState").hide();$("#tableView").show();$.getJSON("/api/table/"+n+"?page=1",function(r){if(!r.code)fp(n,1);});}
 function fp(n,p){
+ // 清除汇总模式
+ $("#aggRows").remove();$("#aggBar").hide();_aggMode.active=false;
  var s=$("#searchInput").val()||"";_searchKw=s;
  // 退出全部记录模式时立即移除横幅
  if(!_showAllRows)$("#showAllBanner").remove();
@@ -1318,8 +1333,13 @@ $("#groupSummaryBtn").click(function(){
  });
 });
 var _gsAggs=[];
+// 显示方式切换
+$(document).on("change","input[name='gsMode']",function(){
+ if($("#gsModeInline").prop("checked")){$("#gsNewNameWrap").hide();$("#gsTableName").val("");}
+ else{$("#gsNewNameWrap").show();}
+});
 $("#gsAddAgg").click(function(){
- var f=$("#gsAggField").val(),t=$("#gsAggType").val(),a=$("#gsAggAlias").val().trim();
+ var f=$("#gsAggField").val(),t='sum',a=$("#gsAggAlias").val().trim();
  if(!f){alert("请选择字段");return;}
  var alias=a||f+"_"+t;
  // 检查重复
@@ -1360,10 +1380,104 @@ function renderGsAggs(){
 $("#gsGroupField").change(function(){
  $("#gsConfirmBtn").prop("disabled",!$(this).val()||_gsAggs.length===0);
 });
+// ── 本表汇总模式 ─────────────────────────────
+var _aggMode={active:false,groupField:null,sumFields:[],groups:[]};
+
+function renderAggRows(data){
+ // 清除旧汇总行
+ $("#aggRows").remove();_aggMode.active=true;
+ _aggMode.groupField=data.group_field;_aggMode.sumFields=data.sum_fields;_aggMode.groups=data.groups;
+ var groups=data.groups,sumFields=data.sum_fields,gf=data.group_field;
+ if(!groups||!groups.length)return;
+ var html='<tbody id="aggRows" style="background:#fff8e1">';
+ // 分隔行
+ var colCount=$("#tableHead th").length||1;
+ html+='<tr><td colspan="'+colCount+'" style="border-bottom:2px solid #e6a800;padding:2px 8px;font-size:12px;color:#e6a800;font-weight:bold;background:#fff8e1">📊 汇总模式 — 按「'+gf+'」分组</td></tr>';
+ // 汇总数据头
+ var headers=[gf].concat(sumFields);
+ html+='<tr style="font-weight:bold;background:#fff3cd">';
+ $.each(headers,function(_,h){html+='<td style="border-bottom:2px solid #e6a800">'+h+'</td>';});
+ html+='</tr>';
+ // 每组一行
+ $.each(groups,function(_,row){
+ html+='<tr style="background:#fffde7">';
+ html+='<td><strong>'+row[gf]+'</strong></td>';
+ $.each(sumFields,function(_,sf){
+ var v=row[sf];if(v===null||v===undefined)v='';
+ html+='<td>'+(typeof v==='number'?v.toFixed(2):v)+'</td>';
+ });
+ html+='</tr>';
+ });
+ // 合计行
+ if(data.total){
+ html+='<tr style="font-weight:bold;background:#fff8e1;border-top:2px solid #e6a800">';
+ html+='<td><strong>合计</strong></td>';
+ $.each(sumFields,function(_,sf){
+ html+='<td>'+(data.total[sf]!==undefined?parseFloat(data.total[sf]).toFixed(2):'')+'</td>';
+ });
+ html+='</tr>';
+ }
+ html+='</tbody>';
+ $("#dataTable").append(html);
+ // 显示汇总横幅
+ var info='📊 按「'+gf+'」分组，'+sumFields.length+' 个汇总字段';
+ $("#aggBarInfo").text(info);$("#aggBar").show();
+}
+
+// 取消汇总
+$("#aggCancelBtn").click(function(){
+ $("#aggRows").remove();$("#aggBar").hide();_aggMode.active=false;
+});
+
+// 存为新表
+$("#aggSaveBtn").click(function(){
+ if(!_aggMode.active||!_aggMode.groups.length)return;
+ var gf=_aggMode.groupField,sf=_aggMode.sumFields;
+ var headers=[gf].concat(sf);
+ var rows=_aggMode.groups.map(function(row){
+ return headers.map(function(h){return row[h]||0;});
+ });
+ // 调用现有创建接口
+ var tn=ct+'_汇总';
+ $.ajax({url:"/api/aggregate/create",type:"POST",contentType:"application/json",
+ data:JSON.stringify({new_name:tn,headers:headers,rows:rows,tables:[ct],key_field:gf}),
+ success:function(r){
+ if(r.code===0){alert(" 已保存为新表: "+r.msg);lt();}
+ else alert(r.msg);
+ }
+ });
+});
+
 $("#gsConfirmBtn").click(function(){
  var gf=$("#gsGroupField").val(),tn=$("#gsTableName").val().trim();
- if(!gf||_gsAggs.length===0){alert("请选择分组字段并添加汇总项");return;}
- // 同步别名
+ var isInline=$("#gsModeInline").prop("checked");
+ if(!gf||_gsAggs.length===0){alert("请选择分组字段并添加汇总字段");return;}
+ // 本表模式：只保留汇总字段（求和）
+ if(isInline){
+ var sumFields=[];
+ $(".gs-agg-item").each(function(){
+ var idx=$(this).data("idx");
+ if(_gsAggs[idx]&&_gsAggs[idx].type==='sum')sumFields.push(_gsAggs[idx].field);
+ });
+ if(!sumFields.length){alert("本表模式仅支持求和类型");return;}
+ var btn=$(this);btn.prop("disabled",true);
+ $("#gsResult").html('<span class="text-info">⏳ 正在汇总...</span>');
+ $.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/aggregate-inline",type:"POST",contentType:"application/json",
+ data:JSON.stringify({group_field:gf,sum_fields:sumFields}),
+ success:function(r){
+ if(r.code===0){
+ _groupSummaryModal.hide();
+ renderAggRows(r.data);
+ }else{
+ $("#gsResult").html('<span class="text-danger"> '+r.msg+'</span>');
+ btn.prop("disabled",false);
+ }
+ },
+ error:function(){alert("请求失败");btn.prop("disabled",false);}
+ });
+ return;
+ }
+ // 存为新表模式（原有逻辑）
  $(".gs-agg-alias").each(function(){
  var idx=$(this).closest(".gs-agg-item").data("idx");
  _gsAggs[idx].alias=$(this).val().trim()||_gsAggs[idx].field+"_"+_gsAggs[idx].type;
