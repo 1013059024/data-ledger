@@ -499,6 +499,7 @@ function fp(n,p){
  $("#keyFieldDisplay").text(_currentKf||"—");
  if(_currentKf) markKeyFieldHeader();
  }
+ });
  // 检查是否汇总表
  $.getJSON("/api/table/"+encodeURIComponent(n)+"/agg-source",function(ar){
  if(ar.code===0&&ar.data){
@@ -554,10 +555,10 @@ function fp(n,p){
  });
  }else{
  $("#totalRecords .hidden-badge").remove();
- }
- });
- }
- });
+                }
+            });
+        }
+    });
 }
 
 var _hiddenCols=[];
