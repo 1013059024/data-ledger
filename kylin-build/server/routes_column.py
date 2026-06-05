@@ -3,7 +3,7 @@
 """
 import app
 from flask import jsonify, request
-from db import get_schema, _get_conn, alter_column_type
+from db import get_schema, _get_conn, alter_column_type, execute
 
 
 @app.app.route("/api/table/<table_name>/column/<column_name>/type", methods=["PATCH"])
@@ -16,7 +16,6 @@ def api_set_column_type(table_name, column_name):
         nt_upper = new_type.upper()
         if any(kw in nt_upper for kw in ("DECIMAL", "INT", "DOUBLE", "FLOAT", "NUMERIC", "BIGINT", "SMALLINT", "TINYINT")):
             execute(f"UPDATE `{table_name}` SET `{column_name}`=NULL WHERE `{column_name}`='' OR `{column_name}` IS NULL")
-        from db import alter_column_type
         alter_column_type(table_name, column_name, new_type)
         return jsonify({"code": 0, "msg": f"已修改为 {new_type}"})
     except Exception as e:
