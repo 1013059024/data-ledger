@@ -73,7 +73,8 @@
 <div><h4 class="mb-0"><span id="tableName"></span>
 <button class="btn btn-sm btn-outline-secondary ms-2" id="renameTableBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-edit"/></svg></button><button class="btn btn-sm btn-outline-danger ms-1" id="deleteTableBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-trash"/></svg></button></h4>
 <span class="text-muted small" id="totalRecords"></span>
-<span class="text-muted small ms-3"> <span id="keyFieldDisplay">—</span></span></div>
+<span class="text-muted small ms-3"> <span id="keyFieldDisplay">—</span></span>
+ <span id="aggSourceDisplay" style="display:none" class="ms-3 small text-warning"></span></div>
 <div class="d-flex gap-2"><input type="text" id="searchInput" class="form-control form-control-sm" placeholder="搜索..." style="width:200px">
 <button class="btn btn-sm btn-outline-warning" id="clearAllFiltersBtn" style="display:none" title="清除所有筛选"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-filter"/></svg> 筛选</button>
 <button class="btn btn-sm btn-outline-success" id="exportBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-download"/></svg> 导出</button>
@@ -498,6 +499,13 @@ function fp(n,p){
  $("#keyFieldDisplay").text(_currentKf||"—");
  if(_currentKf) markKeyFieldHeader();
  }
+ // 检查是否汇总表
+ $.getJSON("/api/table/"+encodeURIComponent(n)+"/agg-source",function(ar){
+ if(ar.code===0&&ar.data){
+ $("#aggSourceDisplay").html('<svg class="i" width="12" height="12" viewBox="0 0 16 16"><use href="#i-chart"/></svg> 汇总自: '+ar.data.source).show();
+ }else{
+ $("#aggSourceDisplay").hide();
+ }
  });
  // 加载隐藏列
  $.getJSON("/api/table/"+n+"/hidden-cols",function(hcr){
@@ -795,7 +803,23 @@ $("#clearAllFiltersBtn").click(function(){
 });
 
 $("#exportBtn").click(function(){if(!ct){alert("请先选择表");return;}var filtersJson=applyFilters();var params=[];if(filtersJson)params.push("filters="+encodeURIComponent(filtersJson));if(_sortField)params.push("order_field="+encodeURIComponent(_sortField));if(_sortField)params.push("order_dir="+encodeURIComponent(_sortDir));var url="/api/table/"+encodeURIComponent(ct)+"/export"+(params.length?"?"+params.join("&"):"");window.location.href=url;});
-$("#refreshBtn").click(function(){if(ct)fp(ct,cp);});
+$("#refreshBtn").click(function(){
+ if(!ct)return;
+ // 检测是否汇总表，是则先重新汇总再刷新
+ $.getJSON("/api/table/"+encodeURIComponent(ct)+"/agg-source",function(ar){
+ if(ar.code===0&&ar.data){
+ if(confirm("该表为汇总表（源自: "+ar.data.source+"），是否重新汇总？")){
+ $.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/agg-recalc",type:"POST",contentType:"application/json",
+ success:function(r){
+ if(r.code===0){showToast(r.msg,"ok");}else{alert(r.msg);}
+ fp(ct,cp);
+ },
+ error:function(){fp(ct,cp);}
+ });
+ }else{fp(ct,cp);}
+ }else{fp(ct,cp);}
+ });
+});
 $("#dedupBtn").click(function(){
  if(!ct){showToast(" 请先选择一张表","warn");return;}
  // 创建去重预览弹窗（只创建一次）
@@ -1442,8 +1466,12 @@ $("#aggSaveBtn").click(function(){
  $.ajax({url:"/api/aggregate/create",type:"POST",contentType:"application/json",
  data:JSON.stringify({new_name:tn,headers:headers,rows:rows,tables:[ct],key_field:gf}),
  success:function(r){
- if(r.code===0){alert(" 已保存为新表: "+r.msg);lt();}
- else alert(r.msg);
+ if(r.code===0){
+ // 记录汇总来源
+ $.ajax({url:"/api/agg-source/save",type:"POST",contentType:"application/json",
+ data:JSON.stringify({table:r.table_name||tn,source:ct,group_field:gf,sum_fields:sf})});
+ alert(" 已保存为新表: "+r.msg);lt();
+ }else alert(r.msg);
  }
  });
 });
