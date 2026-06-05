@@ -1201,6 +1201,40 @@ def api_clipboard_status():
 
 # ========== 多表汇总 ==========
 
+@app.route("/api/table/<table_name>/aggregate-inline", methods=["POST"])
+def api_aggregate_inline(table_name):
+    """本表汇总：按 group_field 分组，对 sum_fields 求和，返回汇总行"""
+    d = request.get_json()
+    gf = (d or {}).get("group_field", "").strip()
+    sfs = (d or {}).get("sum_fields", [])
+    if not gf or not sfs:
+        return jsonify({"code": 1, "msg": "请选择分组字段和汇总字段"})
+    try:
+        from db import get_schema, query
+        schema = get_schema(table_name)
+        if not schema: return jsonify({"code": 1, "msg": "表不存在"})
+        schema_fields = [s["field"] for s in schema]
+        if gf not in schema_fields: return jsonify({"code": 1, "msg": f"字段 '{gf}' 不存在"})
+        for sf in sfs:
+            if sf not in schema_fields: return jsonify({"code": 1, "msg": f"字段 '{sf}' 不存在"})
+        sum_cols = ", ".join([f'SUM(`{sf}`) AS `{sf}`' for sf in sfs])
+        sql = f'SELECT `{gf}`, {sum_cols} FROM `{table_name}` WHERE `_deleted` IS NULL GROUP BY `{gf}` ORDER BY `{gf}`'
+        rows = query(sql)
+        total = {sf: 0 for sf in sfs}
+        for row in rows:
+            for sf in sfs:
+                v = row.get(sf) or 0
+                total[sf] += float(v)
+        return jsonify({"code": 0, "data": {
+            "groups": rows,
+            "total": total,
+            "group_field": gf,
+            "sum_fields": sfs
+        }})
+    except Exception as e:
+        return jsonify({"code": 1, "msg": f"汇总失败: {str(e)}"})
+
+
 @app.route("/api/aggregate/preview", methods=["POST"])
 def api_aggregate_preview():
     """预览多表汇总结果"""
