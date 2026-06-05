@@ -333,8 +333,8 @@ def api_add_row(table_name):
     cols = ", ".join([f"`{f}`" for f in fields])
     try:
         from db import execute, query_one
-        sql = f"INSERT INTO `{table_name}` ({cols}) VALUES ({', '.join(['%s']*len(fields))})"
-        execute(sql)
+        ph = ", ".join(["NULL"] * len(fields))
+        execute(f"INSERT INTO `{table_name}` ({cols}) VALUES ({ph})")
         pk = get_pk_column(table_name) or "id"
         new_row = query_one(f"SELECT MAX(`{pk}`) as new_id FROM `{table_name}`")
         new_id = new_row["new_id"] if new_row else 0
