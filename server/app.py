@@ -1218,7 +1218,7 @@ def api_aggregate_inline(table_name):
         for sf in sfs:
             if sf not in schema_fields: return jsonify({"code": 1, "msg": f"字段 '{sf}' 不存在"})
         sum_cols = ", ".join([f'SUM(`{sf}`) AS `{sf}`' for sf in sfs])
-        sql = f'SELECT `{gf}`, {sum_cols} FROM `{table_name}` WHERE `_deleted` IS NULL GROUP BY `{gf}` ORDER BY `{gf}`'
+        sql = f'SELECT `{gf}`, {sum_cols} FROM `{table_name}` GROUP BY `{gf}` ORDER BY `{gf}`'
         rows = query(sql)
         total = {sf: 0 for sf in sfs}
         for row in rows:
