@@ -1521,9 +1521,11 @@ def api_group_summary(table_name):
     # 先建空表
     ok, msg = create_empty_table(tn, columns=col_defs)
     if not ok: return jsonify({"code": 1, "msg": msg})
-    # 插入数据
-    placeholders = ", ".join(["%s"] * len(agg_headers))
-    col_names = ", ".join([f"`{h}`" for h in agg_headers])
+    # 插入数据（列名用 _safe_colname 统一处理，避免特殊字符不匹配）
+    from db import _safe_colname as _sc
+    safe_headers = [_sc(h) for h in agg_headers]
+    placeholders = ", ".join(["%s"] * len(safe_headers))
+    col_names = ", ".join([f"`{h}`" for h in safe_headers])
     try:
         for row in rows:
             rv = [row.get(h) if isinstance(row, dict) else row[i] for i, h in enumerate(agg_headers)]
