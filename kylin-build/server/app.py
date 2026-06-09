@@ -1535,6 +1535,11 @@ def api_group_summary(table_name):
         return jsonify({"code": 1, "msg": f"写入数据失败: {e}"})
     db_execute(f"ALTER TABLE `{tn}` COMMENT = %s", (title or f"按{gf}分类汇总",))
     _save_table_manifest()
+    # 记录汇总来源
+    agg = _load_agg()
+    sfs = [a.get("field","") for a in aggs]
+    agg[tn] = {"source": table_name, "group_field": gf, "sum_fields": sfs}
+    _save_agg(agg)
     n = len(rows)
     return jsonify({"code": 0, "msg": f"分类汇总表创建成功，共 {n} 条记录", "table_name": tn})
 
