@@ -1209,7 +1209,7 @@ def api_agg_recalc(table_name):
         if not tgt_schema: return jsonify({"code": 1, "msg": f"汇总表 '{table_name}' 不存在"})
         # 执行汇总查询
         sum_cols = ", ".join([f'SUM("{sf}") AS "{sf}"' for sf in sfs])
-        sql = f'SELECT "{gf}", {sum_cols} FROM "{source}" WHERE "_deleted" IS NULL GROUP BY "{gf}" ORDER BY "{gf}"'
+        sql = f'SELECT "{gf}", {sum_cols} FROM "{source}" GROUP BY "{gf}" ORDER BY "{gf}"'
         rows = query(sql)
         # 清空汇总表数据并重新插入
         execute(f'DELETE FROM "{table_name}" WHERE 1=1')
@@ -1242,7 +1242,7 @@ def api_aggregate_inline(table_name):
         for sf in sfs:
             if sf not in schema_fields: return jsonify({"code": 1, "msg": f"字段 '{sf}' 不存在"})
         sum_cols = ", ".join([f'SUM("{sf}") AS "{sf}"' for sf in sfs])
-        sql = f'SELECT "{gf}", {sum_cols} FROM "{table_name}" WHERE "_deleted" IS NULL GROUP BY "{gf}" ORDER BY "{gf}"'
+        sql = f'SELECT "{gf}", {sum_cols} FROM "{table_name}" GROUP BY "{gf}" ORDER BY "{gf}"'
         rows = query(sql)
         total = {sf: 0 for sf in sfs}
         for row in rows:
