@@ -664,6 +664,7 @@ def api_add_column(table_name):
                 conn.execute(f"DROP TABLE {safe}")
                 conn.execute(f"ALTER TABLE {tmp} RENAME TO {safe}")
                 conn.commit()
+                _save_table_manifest()
             except Exception:
                 conn.rollback()
                 try: conn.execute(f"DROP TABLE IF EXISTS {tmp}")
