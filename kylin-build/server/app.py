@@ -1873,12 +1873,14 @@ def api_upload_import():
         if ok:
             db_execute(f"ALTER TABLE `{tn}` COMMENT = %s", (title or tn,))
             _save_table_manifest()
+            kf_map = _load_kf(); kf_map[tn] = kf; _save_kf(kf_map)
             msg += f"（空表，已建 {len(uh)} 个字段）"
         return jsonify({"code": 0 if ok else 1, "msg": msg, "table_name": tn})
     ok, msg = create_table_from_data(uh, flt, tn); _cleanup(sid)
     if ok:
         db_execute(f"ALTER TABLE `{tn}` COMMENT = %s", (title or tn,))
         _save_table_manifest()
+        kf_map = _load_kf(); kf_map[tn] = kf; _save_kf(kf_map)
     if ok: msg += f"（省略 {len(ah)-len(uh)} 列，过滤 {before-len(flt)} 行）"
     return jsonify({"code": 0 if ok else 1, "msg": msg, "table_name": tn})
 
