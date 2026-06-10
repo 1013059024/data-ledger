@@ -209,13 +209,23 @@ def alter_column_type(tn, col, new_type):
         if fn == "id": col_defs.append('"id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT')
         elif fn == col: col_defs.append(f'"{fn}" {new_type}')
         else: col_defs.append(f'"{fn}" {s["type"]}')
-    data_cols = ", ".join(f'"{c}"' for c in [s["field"] for s in schema if s["field"] != "id"])
+    non_pk = [s["field"] for s in schema if s["field"] != "id"]
+    data_cols = ", ".join(f'"{c}"' for c in non_pk)
+    # 当目标类型为整数类时，显式 CAST 避免 SQLite 保留小数位
+    is_int_target = any(kw in new_type.upper() for kw in ("INT", "BIGINT", "SMALLINT", "TINYINT"))
+    if is_int_target:
+        select_cols = ", ".join(
+            f'CAST("{c}" AS INTEGER)' if c == col else f'"{c}"'
+            for c in non_pk
+        )
+    else:
+        select_cols = data_cols
     tmp, safe = f'"{tn}_tmp_retype"', f'"{tn}"'
     conn = _get_conn()
     try:
         conn.execute("BEGIN")
         conn.execute(f"CREATE TABLE {tmp} ({', '.join(col_defs)})")
-        if data_cols: conn.execute(f"INSERT INTO {tmp} ({data_cols}) SELECT {data_cols} FROM {safe}")
+        if data_cols: conn.execute(f"INSERT INTO {tmp} ({data_cols}) SELECT {select_cols} FROM {safe}")
         conn.execute(f"DROP TABLE {safe}"); conn.execute(f"ALTER TABLE {tmp} RENAME TO {safe}")
         conn.commit()
     except Exception:
