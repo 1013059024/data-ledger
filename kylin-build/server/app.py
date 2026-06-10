@@ -18,6 +18,56 @@ _AGG_FILE = os.path.join(_DATA_DIR, "_agg_sources.json")
 _BACKUP_DIR = os.path.join(_DATA_DIR, "_backup")
 _DEL_TOKEN = os.urandom(8).hex()  # 每次启动随机生成，只有页面知道
 
+# ── 只读访问控制 ─────────────────────────────────
+_LOCAL_IPS = ("127.0.0.1", "::1", "localhost")
+
+def _is_local():
+    """判断请求是否来自本机"""
+    return request.remote_addr in _LOCAL_IPS
+
+def _readonly_deny():
+    """非本机访问写操作时返回 403"""
+    return jsonify({"code": 403, "msg": "只读模式：非本机用户仅可查看"}), 403
+
+# 写操作路由列表（method + path pattern）
+_WRITE_ROUTES = [
+    ("POST",  "/api/table/", "/row", "/row/", "/batch-update",
+              "/create", "/rename", "/delete", "/column/", "/reorder-columns",
+              "/key-field", "/hidden-cols", "/unhide", "/unhide-all",
+              "/un-table-delete", "/hidden-rows/unhide", "/rows/unhide",
+              "/rows/restore", "/rows/unhide-all", "/rows/un-table-delete",
+              "/import"),
+    ("PUT",   "/api/table/", "/key-field", "/column/", "/reorder-columns"),
+    ("PATCH", "/api/table/", "/column/"),
+    ("DELETE","/api/table/", "/row/"),
+    ("POST",  "/api/aggregate/", "/upload/", "/backup/",
+              "/sync/", "/table-groups", "/clipboard/", "/database/",
+              "/agg-source/save", "/agg-recalc"),
+    ("POST",  "/api/table/", "/group-summary"),
+]
+
+@app.before_request
+def check_readonly():
+    path = request.path
+    method = request.method
+    if _is_local():
+        return  # 本机放行
+    if method == "GET":
+        return  # GET 请求放行
+    # 检查是否写操作
+    for rule_method, *patterns in _WRITE_ROUTES:
+        if rule_method != method:
+            continue
+        for p in patterns:
+            if p in path:
+                return _readonly_deny()
+    # 未匹配的 POST/PUT/PATCH/DELETE 也放行（避免误伤）
+
+# ── 前台页面 ────────────────────────────────────
+@app.route("/api/readonly-status")
+def api_readonly_status():
+    return jsonify({"readonly": not _is_local()})
+
 
 def _load_m():
     if not os.path.exists(_MAP_FILE): return []
