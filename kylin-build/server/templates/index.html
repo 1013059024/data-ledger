@@ -283,6 +283,24 @@
 <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">关闭</button></div>
 </div></div></div>
 
+<div class="modal fade" id="formulaModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+<div class="modal-header"><h5 class="modal-title"> 公式</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body">
+ <div class="small text-muted mb-2">支持 + - * / ( )，点击下方字段名插入到公式中：</div>
+ <div class="input-group mb-2">
+  <input type="text" class="form-control" id="formulaInput" placeholder="例：路面宽度*长度" autocomplete="off">
+  <button class="btn btn-outline-secondary" id="formulaTestBtn" title="测试公式">试算</button>
+ </div>
+ <div id="formulaFieldList" class="d-flex flex-wrap gap-1 mb-2" style="max-height:200px;overflow-y:auto"></div>
+ <div id="formulaPreview" class="small text-success" style="min-height:20px"></div>
+</div>
+<div class="modal-footer">
+ <button class="btn btn-outline-danger" id="formulaClearBtn" style="display:none">清除公式</button>
+ <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+ <button class="btn btn-primary" id="formulaConfirmBtn">确定</button>
+</div>
+</div></div></div>
+
 <div class="modal fade" id="reorderModal" tabindex="-1"><div class="modal-dialog modal-sm modal-dialog-centered"><div class="modal-content">
 <div class="modal-header"><h5 class="modal-title"> 调整字段顺序</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 <div class="modal-body"><div class="list-group" id="reorderList"></div></div>
@@ -1533,6 +1551,35 @@ $("#gsConfirmBtn").click(function(){
  });
 });
 
+// ── 公式弹窗 ──────────────────────────────
+var _formulaModalField="";
+$("#formulaConfirmBtn").click(function(){
+ var expr=$("#formulaInput").val().trim();
+ if(expr){
+ _formulaCols[ct][_formulaModalField]=expr;
+ bootstrap.Modal.getInstance(document.getElementById("formulaModal")).hide();
+ fp(ct,cp);
+ }
+});
+$("#formulaClearBtn").click(function(){
+ delete _formulaCols[ct][_formulaModalField];
+ bootstrap.Modal.getInstance(document.getElementById("formulaModal")).hide();
+ fp(ct,cp);
+});
+$("#formulaInput").on("keydown",function(e){if(e.key==="Enter")$("#formulaConfirmBtn").click();});
+$("#formulaModal").on("hidden.bs.modal",function(){$("#formulaFieldList").empty();$("#formulaPreview").text("");$("#formulaClearBtn").hide();});
+$("#formulaTestBtn").click(function(){
+ var expr=$("#formulaInput").val().trim();
+ if(!expr){$("#formulaPreview").text("");return;}
+ // 取第一行数据进行试算
+ var $row=$("#tableBody tr:first td.editable");
+ if(!$row.length){$("#formulaPreview").text("无数据可试算");return;}
+ var rowData={};
+ $row.each(function(){rowData[$(this).data("field")]=$(this).data("val");});
+ var result=evalFormula(expr,rowData);
+ $("#formulaPreview").text(result!==null?"结果: "+result:"公式无效");
+});
+
 $("#backfillBtn").click(function(){
  if(!ct){alert("请先选择表");return;}
  if(!confirm("按已建立的字段映射，将关联表数据补填到当前表？"))return;
@@ -1804,7 +1851,26 @@ $("#colMenu").on("click",".context-menu-item",function(){
 
  if(action==="delete-col"&&confirm("确认删除列「"+fld+"」？该列数据将永久丢失！"))$.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/column/"+encodeURIComponent(fld),type:"DELETE",success:function(r){if(r.code===0)fp(ct,cp);else alert(r.msg);}});
  if(action==="toggle-freeze"){var idx=_frozenCols.indexOf(fld);if(idx>-1){_frozenCols.splice(idx,1);}else{_frozenCols.push(fld);}applyFrozen();}
- if(action==="set-formula"){if(!_formulaCols[ct])_formulaCols[ct]={};var cur=_formulaCols[ct][fld]||"";if(cur){if(confirm("清除「"+fld+"」的公式【"+cur+"】？\n取消可修改公式")){delete _formulaCols[ct][fld];fp(ct,cp);}else{var expr=prompt("公式（支持 + - * / ( )，字段名引用）：",cur);if(expr&&expr.trim()){_formulaCols[ct][fld]=expr.trim();fp(ct,cp);}}}else{var expr=prompt("公式（支持 + - * / ( )，字段名引用）：\n示例：路面宽度*长度");if(expr&&expr.trim()){_formulaCols[ct][fld]=expr.trim();fp(ct,cp);}}}
+ if(action==="set-formula"){
+ if(!_formulaCols[ct])_formulaCols[ct]={};
+ var cur=_formulaCols[ct][fld]||"";
+ // 填充字段列表
+ var $list=$("#formulaFieldList").empty();
+ $.ajax({url:"/api/table/"+encodeURIComponent(ct),type:"GET",async:false,success:function(r){
+ if(r.code===0)(r.data.schema||[]).forEach(function(c){
+ if(c.field!="id"&&c.field!="_deleted"&&c.field!==fld){
+ var $btn=$('<span class="btn btn-sm btn-outline-secondary" style="cursor:pointer;font-size:12px">'+c.field+'</span>');
+ $btn.click(function(){var inp=document.getElementById("formulaInput");var pos=inp.selectionStart||inp.value.length;var txt=inp.value;inp.value=txt.slice(0,pos)+c.field+txt.slice(pos);inp.focus();inp.selectionStart=inp.selectionEnd=pos+c.field.length;$("#formulaPreview").text("");});
+ $list.append($btn);
+ }});
+ }});
+ $("#formulaInput").val(cur);
+ if(cur)$("#formulaClearBtn").show();else $("#formulaClearBtn").hide();
+ $("#formulaPreview").text("");
+ _formulaModalField=fld;
+ var $modal=new bootstrap.Modal(document.getElementById("formulaModal"));
+ $modal.show();
+}
  if(action==="toggle-key-field"){
  var newKf=(_currentKf===fld)?"":fld;
  $.ajax({url:"/api/table/"+encodeURIComponent(ct)+"/key-field",type:"PUT",contentType:"application/json",
