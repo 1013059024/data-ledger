@@ -90,6 +90,9 @@
 <div id="filterTags" style="display:none;margin-bottom:6px;padding:4px 0;min-height:28px"></div>
 <div class="table-responsive"><table class="table table-bordered table-hover table-sm" id="dataTable" style="border-collapse:collapse"><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table></div>
 <div id="selectionBar" style="display:none;padding:3px 8px;font-size:12px;color:#666;background:#fafafa;border:1px solid #dee2e6;border-top:0;border-radius:0 0 4px 4px;min-height:22px"><span id="selInfo"></span></div>
+<div id="readonlyBar" style="display:none;padding:6px 12px;font-size:13px;background:#f8d7da;border:1px solid #f5c6cb;border-top:0;border-radius:0 0 4px 4px;color:#721c24">
+ <svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-eye"/></svg> 只读模式：非本机用户仅可查看，不能编辑或删除
+</div>
 <div id="aggBar" style="display:none;padding:6px 12px;font-size:13px;background:#fff8e1;border:1px solid #ffe082;border-top:0;border-radius:0 0 4px 4px">
  <span id="aggBarInfo"></span>
  <div class="float-end">
@@ -2614,7 +2617,7 @@ $("#importDbInput").change(function(){
  });
 });
 
-$(document).ready(function(){lt();$.getJSON("/api/sync/mappings",function(r){if(r.code===0)syncMappings=r.data;});});
+$(document).ready(function(){lt();$.getJSON("/api/sync/mappings",function(r){if(r.code===0)syncMappings=r.data;});$.getJSON("/api/readonly-status",function(r){if(r.readonly)$("#readonlyBar").show();});});
 </script>
 </body>
 </html>
