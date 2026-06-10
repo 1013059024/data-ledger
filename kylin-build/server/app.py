@@ -630,10 +630,49 @@ def api_add_column(table_name):
         return jsonify({"code": 1, "msg": "列名只允许字母、数字、下划线和中文"})
     after = (d or {}).get("after","")
     try:
-        sql = f"ALTER TABLE `{table_name}` ADD COLUMN `{name}` VARCHAR(255) NULL"
+        # SQLite 不支持 AFTER，所以指定位置时要用重建表策略
         if after:
-            sql += f" AFTER `{after}`"
-        execute(sql)
+            from db import _get_conn, get_schema as gs
+            schema = gs(table_name)
+            if not schema: return jsonify({"code": 1, "msg": "表不存在"})
+            # 重建列顺序：插入到 after 列之后
+            new_cols = []
+            inserted = False
+            for s in schema:
+                new_cols.append(s)
+                if s["field"] == after:
+                    new_cols.append({"field": name, "type": "VARCHAR(255)"})
+                    inserted = True
+            if not inserted:
+                new_cols.append({"field": name, "type": "VARCHAR(255)"})
+            col_defs = []
+            for s in new_cols:
+                fn = s["field"]
+                if fn == "id": col_defs.append('"id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT')
+                else: col_defs.append(f'"{fn}" {s["type"]}')
+            non_pk = [s["field"] for s in new_cols if s["field"] != "id"]
+            data_cols = ", ".join(f'"{c}"' for c in non_pk)
+            tmp = f'"{table_name}_tmp_addcol"'
+            safe = f'"{table_name}"'
+            conn = _get_conn()
+            try:
+                conn.execute("BEGIN")
+                conn.execute(f"CREATE TABLE {tmp} ({', '.join(col_defs)})")
+                if non_pk:
+                    old_cols = ", ".join(f'"{s["field"]}"' for s in schema if s["field"] != "id")
+                    conn.execute(f"INSERT INTO {tmp} ({data_cols}) SELECT {old_cols} FROM {safe}")
+                conn.execute(f"DROP TABLE {safe}")
+                conn.execute(f"ALTER TABLE {tmp} RENAME TO {safe}")
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                try: conn.execute(f"DROP TABLE IF EXISTS {tmp}")
+                except: pass
+                raise
+            finally:
+                conn.close()
+        else:
+            execute(f"ALTER TABLE `{table_name}` ADD COLUMN `{name}` VARCHAR(255) NULL")
         return jsonify({"code": 0, "msg": f"列 `{name}` 已添加"})
     except Exception as e:
         return jsonify({"code": 1, "msg": f"添加失败: {e}"})
