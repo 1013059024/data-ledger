@@ -659,11 +659,13 @@ def api_add_column(table_name):
                 conn.execute("BEGIN")
                 conn.execute(f"CREATE TABLE {tmp} ({', '.join(col_defs)})")
                 if non_pk:
-                    # 新表比旧表多了1列（新插入的列），旧表数据复制过来时新列填 NULL
+                    # 按新表列名逐列映射，新列填 NULL，确保数据不会错位
                     old_non_pk = [s["field"] for s in schema if s["field"] != "id"]
-                    old_cols = ", ".join(f'"{c}"' for c in old_non_pk)
-                    null_pad = ", ".join(["NULL"] * (len(non_pk) - len(old_non_pk)))
-                    conn.execute(f"INSERT INTO {tmp} ({data_cols}) SELECT {old_cols}, {null_pad} FROM {safe}")
+                    select_parts = []
+                    for c in non_pk:
+                        select_parts.append(f'"{c}"' if c in old_non_pk else "NULL")
+                    select_sql = ", ".join(select_parts)
+                    conn.execute(f"INSERT INTO {tmp} ({data_cols}) SELECT {select_sql} FROM {safe}")
                 conn.execute(f"DROP TABLE {safe}")
                 conn.execute(f"ALTER TABLE {tmp} RENAME TO {safe}")
                 conn.commit()
