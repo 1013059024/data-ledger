@@ -15,6 +15,7 @@ def _convert_sql(sql):
     sql = re.sub(r'\s+ENGINE\s*=\s*\w+(?:\s+DEFAULT\s+(?:CHARSET|COLLATE)\s*=\s*\w+)*', '', sql, flags=re.IGNORECASE)
     sql = re.sub(r'"id"\s+INT\s+NOT\s+NULL\s+AUTO_INCREMENT\s*,', '"id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,', sql, flags=re.IGNORECASE)
     sql = re.sub(r'\s*,\s*PRIMARY\s+KEY\s*\(\s*"id"\s*\)', '', sql, flags=re.IGNORECASE)
+    sql = re.sub(r'\s+AFTER\s+"[^"]*"\s*', '', sql, flags=re.IGNORECASE)
     return sql
 
 
