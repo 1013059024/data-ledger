@@ -623,62 +623,13 @@ def api_hidden_cols(table_name):
 
 @app.route("/api/table/<table_name>/column", methods=["POST"])
 def api_add_column(table_name):
-    """插入空列（after 指定在某列之后）"""
+    """插入空列"""
     d = request.get_json(); name = (d or {}).get("name","").strip()
     if not name: return jsonify({"code": 1, "msg": "列名不能为空"})
     if not re.match(r'^[a-zA-Z0-9_\u4e00-\u9fff]+$', name):
         return jsonify({"code": 1, "msg": "列名只允许字母、数字、下划线和中文"})
-    after = (d or {}).get("after","")
     try:
-        # SQLite 不支持 AFTER，所以指定位置时要用重建表策略
-        if after:
-            from db import _get_conn, get_schema as gs
-            schema = gs(table_name)
-            if not schema: return jsonify({"code": 1, "msg": "表不存在"})
-            # 重建列顺序：插入到 after 列之后
-            new_cols = []
-            inserted = False
-            for s in schema:
-                new_cols.append(s)
-                if s["field"] == after:
-                    new_cols.append({"field": name, "type": "VARCHAR(255)"})
-                    inserted = True
-            if not inserted:
-                new_cols.append({"field": name, "type": "VARCHAR(255)"})
-            col_defs = []
-            for s in new_cols:
-                fn = s["field"]
-                if fn == "id": col_defs.append('"id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT')
-                else: col_defs.append(f'"{fn}" {s["type"]}')
-            non_pk = [s["field"] for s in new_cols if s["field"] != "id"]
-            data_cols = ", ".join(f'"{c}"' for c in non_pk)
-            tmp = f'"{table_name}_tmp_addcol"'
-            safe = f'"{table_name}"'
-            conn = _get_conn()
-            try:
-                conn.execute("BEGIN")
-                conn.execute(f"CREATE TABLE {tmp} ({', '.join(col_defs)})")
-                if non_pk:
-                    # 按新表列名逐列映射，新列填 NULL，确保数据不会错位
-                    old_non_pk = [s["field"] for s in schema if s["field"] != "id"]
-                    select_parts = []
-                    for c in non_pk:
-                        select_parts.append(f'"{c}"' if c in old_non_pk else "NULL")
-                    select_sql = ", ".join(select_parts)
-                    conn.execute(f"INSERT INTO {tmp} ({data_cols}) SELECT {select_sql} FROM {safe}")
-                conn.execute(f"DROP TABLE {safe}")
-                conn.execute(f"ALTER TABLE {tmp} RENAME TO {safe}")
-                conn.commit()
-                _save_table_manifest()
-            except Exception:
-                conn.rollback()
-                try: conn.execute(f"DROP TABLE IF EXISTS {tmp}")
-                except: pass
-                raise
-            finally:
-                conn.close()
-        else:
-            execute(f"ALTER TABLE `{table_name}` ADD COLUMN `{name}` VARCHAR(255) NULL")
+        execute(f"ALTER TABLE `{table_name}` ADD COLUMN `{name}` VARCHAR(255) NULL")
         return jsonify({"code": 0, "msg": f"列 `{name}` 已添加"})
     except Exception as e:
         return jsonify({"code": 1, "msg": f"添加失败: {e}"})
