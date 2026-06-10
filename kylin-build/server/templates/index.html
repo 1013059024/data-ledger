@@ -388,7 +388,7 @@ $("#groupManageBtn").click(function(){
  html+='<div class="mb-2 p-2 border rounded group-edit-row">'
  +'<div class="d-flex justify-content-between align-items-center mb-1">'
  +'<input type="text" class="form-control form-control-sm group-name-input" value="'+g.name+'" style="width:60%;display:inline-block">'
- +'<button class="btn btn-sm btn-outline-danger ms-1 del-group" data-idx="'+i+'"></button></div>'
+ +'<button class="btn btn-sm btn-outline-danger ms-1 del-group" data-idx="'+i+'">✕</button></div>'
  +'<div class="small text-muted">包含 '+((g.tables||[]).length)+' 张表</div></div>';
  });
  html+='<button class="btn btn-sm btn-outline-primary w-100" id="addGroupBtn"><svg class="i" width="14" height="14" viewBox="0 0 16 16"><use href="#i-plus"/></svg> 添加分组</button>';
@@ -584,7 +584,7 @@ function applyFilters(){
  var display=vals.length>3?vals.slice(0,3).join(', ')+"... 等"+vals.length+"项":vals.join(', ');
  ft.append('<span class="filter-tag" data-field="'+fld+'" style="display:inline-block;margin:2px 4px;padding:2px 8px;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;font-size:12px;cursor:default">'
  +'<span class="filter-tag-field fw-bold me-1">'+fld+'</span><span class="filter-tag-vals">'+display+'</span>'
- +'<span class="filter-tag-remove ms-1" data-field="'+fld+'" style="cursor:pointer;opacity:0.6"></span></span>');
+ +'<span class="filter-tag-remove ms-1" data-field="'+fld+'" style="cursor:pointer;opacity:0.6">✕</span></span>');
  }
  ft.show();
  }else{
