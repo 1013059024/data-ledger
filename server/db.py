@@ -157,7 +157,7 @@ def sync_related(src_tn, row_id, field, value, key_field):
 
 def _safe_colname(name):
     if not name: return "col"
-    s = str(name).strip(); safe = re.sub(r'[^\w\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]', '_', s).strip("_")
+    s = str(name).strip(); safe = re.sub(r'[`\x00]', '', s).strip()
     if not safe or safe[0].isdigit(): safe = "col_"+safe
     kw = {"id","key","index","order","group","select","from","where","table","column","date","desc","asc","delete","update","insert","drop","alter","add","primary","unique","foreign","check","default"}
     if safe.lower() in kw: safe += "_"

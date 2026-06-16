@@ -485,17 +485,19 @@ function applyFrozen(){
  });
 }
 function evalFormula(expr,rowData){
- try{expr=expr.replace(/\s/g,"");var tokens=expr.match(/([+\-*/()]|[^+\-*/()]+)/g)||[];
- for(var i=0;i<tokens.length;i++){var t=tokens[i];
- if(t==='+'||t==='-'||t==='*'||t==='/'||t==='('||t===')') continue;
- if(/^[\d.]+$/.test(t)) continue;
- var found=null;
- for(var f in rowData){if(f.toLowerCase()===t.toLowerCase()){found=rowData[f];break;}
- var fclean=f.replace(/[^\w\u4e00-\u9fff]/g,'');var tclean=t.replace(/[^\w\u4e00-\u9fff]/g,'');
- if(fclean===tclean){found=rowData[f];break;}}
- if(found===null||found===undefined) found=0;
- tokens[i]=String(Number(found)||0);}
- var r=Function('"use strict";return ('+tokens.join('')+')')();
+ try{expr=expr.replace(/\s/g,"");
+ // 按字段名长度降序，先替换长字段名（如"总里程(km)"优先于"总里程"），避免被括号截断
+ var fields=Object.keys(rowData).sort(function(a,b){return b.length-a.length;});
+ var ph={},c=0;
+ for(var fi=0;fi<fields.length;fi++){
+ var fn=fields[fi];
+ if(expr.indexOf(fn)>=0){
+ var k="__F"+c+"__";ph[k]=rowData[fn];expr=expr.split(fn).join(k);c++;
+ }
+ }
+ for(var k in ph){var v=Number(ph[k]);if(isNaN(v))v=0;expr=expr.split(k).join(v);}
+ if(/[^\d.+\-*/()]/.test(expr)) return null;
+ var r=Function('"use strict";return ('+expr+')')();
  return isNaN(r)?null:r;
  }catch(e){return null;}
 }
@@ -858,7 +860,7 @@ $("#dedupBtn").click(function(){
  success:function(r){
  if(r.code===0&&r.data){
  var g=r.data.groups,items=r.data.items,kf=r.data.key_field,afs=r.data.all_fields;
- if(!g){dm.hide();showToast(" 无重复记录","ok");$btn.prop("disabled",false);return;}
+ if(!g){$dedupBody.html('<div class="text-center py-5"><h5 class="text-success"> 没有发现重复记录</h5><p class="text-muted">当前表所有记录的关键字段值均唯一</p></div>');$dedupFooter.html('<button class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>');$btn.prop("disabled",false);return;}
  var totalDel=0;
  items.forEach(function(grp){totalDel+=grp.del_ids.length;});
  // 统计每组删几条，构建HTML
@@ -2359,7 +2361,7 @@ function loadSync(){
  $.getJSON("/api/sync/mappings",function(r){if(r.code)return;syncMappings=r.data;renderSyncList();});
 }
 function renderSyncList(){var box=$("#syncList").empty();if(!syncMappings.length){box.html('<div class="text-muted small">暂无映射。新建一个：选择源表/目标表/关键字段，点「加载字段对」，调整后保存。</div>');return;}
- syncMappings.forEach(function(m,i){var ps=m.ps.map(function(p){return p.s+" ↔ "+p.t;}).join(", ");box.append('<div class="card mb-2"><div class="card-body py-2"><div class="d-flex justify-content-between"><span><strong>'+m.st+'</strong> <strong>'+m.tt+'</strong>（关键: '+m.kf+'）</span><span><button class="btn btn-sm btn-outline-primary edit-sync me-1" data-idx="'+i+'"> 编辑</button><button class="btn btn-sm btn-outline-danger del-sync" data-idx="'+i+'"></button></span></div><div class="small text-muted">'+ps+'</div></div></div>');});
+ syncMappings.forEach(function(m,i){var ps=m.ps.map(function(p){return p.s+" ↔ "+p.t;}).join(", ");box.append('<div class="card mb-2"><div class="card-body py-2"><div class="d-flex justify-content-between"><span><strong>'+m.st+'</strong> <strong>'+m.tt+'</strong>（关键: '+m.kf+'）</span><span><button class="btn btn-sm btn-outline-primary edit-sync me-1" data-idx="'+i+'"> 编辑</button><button class="btn btn-sm btn-outline-danger del-sync" data-idx="'+i+'">&times;</button></span></div><div class="small text-muted">'+ps+'</div></div></div>');});
  $(".del-sync").click(function(){syncMappings.splice(parseInt($(this).data("idx")),1);renderSyncList();});
  $(".edit-sync").click(function(){editMapping(parseInt($(this).data("idx")));});
 }
@@ -2383,7 +2385,7 @@ function editMapping(idx){
  '<div class="col-md-5"><select class="form-select form-select-sm sync-src-fld">'+fieldCache[m.st]+'</select></div>'+
  '<div class="col-md-1 text-center">↔</div>'+
  '<div class="col-md-4"><select class="form-select form-select-sm sync-tgt-fld">'+fieldCache[m.tt]+'</select></div>'+
- '<div class="col-md-2" style="white-space:nowrap"><button class="btn btn-sm btn-outline-danger remove-pair"></button></div></div>';
+ '<div class="col-md-2" style="white-space:nowrap"><button class="btn btn-sm btn-outline-danger remove-pair">&times;</button></div></div>';
  var $r=$(row);$r.find(".sync-src-fld").val(p.s);$r.find(".sync-tgt-fld").val(p.t);
  $("#syncPairs").append($r);
  });
@@ -2416,7 +2418,7 @@ function showFieldPairs(){
  '<div class="col-md-5"><select class="form-select form-select-sm sync-src-fld">'+fieldCache[st]+'</select></div>'+
  '<div class="col-md-1 text-center">↔</div>'+
  '<div class="col-md-4"><select class="form-select form-select-sm sync-tgt-fld">'+fieldCache[tt]+'</select></div>'+
- '<div class="col-md-2" style="white-space:nowrap">'+warnHtml+unifyHtml+'<button class="btn btn-sm btn-outline-danger remove-pair"></button></div></div>';
+ '<div class="col-md-2" style="white-space:nowrap">'+warnHtml+unifyHtml+'<button class="btn btn-sm btn-outline-danger remove-pair">&times;</button></div></div>';
  var $r=$(row);$r.find(".sync-src-fld").val(sf);if(at)$r.find(".sync-tgt-fld").val(at);
  $("#syncPairs").append($r);
  });

@@ -3,12 +3,12 @@
 import os, sys, json, base64, urllib.request, ssl
 from datetime import datetime
 
-REPO_DIR = r"E:\reasonix-data\projects\data-ledger"
+REPO_DIR = r"E:\reasonix-data\projects\data-ledger-windows-linux\data-ledger-windows-linux"
 OWNER = "1013059024"
 REPO = "data-ledger"
-BRANCH = "main"
-TAG = "v3"
-TOKEN = "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"
+BRANCH = "windows/linux"
+TAG = "v3.1"
+TOKEN = os.environ.get("GITHUB_TOKEN", "")
 ctx = ssl._create_unverified_context()
 
 ARCHIVE_EXTS = {'.zip', '.rar', '.7z', '.tar.gz', '.tgz', '.gz'}
@@ -23,8 +23,13 @@ def api(method, path, data=None, accept=None):
     headers['Accept'] = accept or 'application/vnd.github.v3+json'
     req = urllib.request.Request(url, headers=headers, method=method)
     if data: req.data = json.dumps(data).encode('utf-8')
-    resp = urllib.request.urlopen(req, timeout=60, context=ctx)
-    return json.loads(resp.read())
+    try:
+        resp = urllib.request.urlopen(req, timeout=60, context=ctx)
+        return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        print(f'    API ERROR {e.code}: {body[:500]}', flush=True)
+        raise
 
 def get_or_create_blob(content):
     blob = api('POST', '/git/blobs', {
@@ -49,7 +54,8 @@ def main():
     # ── 2. 遍历本地文件（排除压缩包/数据/缓存）──
     IGNORE_DIRS = {'.git', '__pycache__', 'node_modules', '.venv', 'venv',
                    'dist', 'build', '.idea', '.vscode', 'mysql-data',
-                   '_tmp', '_backup', 'data-ledger-portable', 'target', 'data'}
+                   '_tmp', '_backup', 'data-ledger-portable', 'target', 'data',
+                   'example'}
     tree_items = []
     for root, dirs, files in os.walk(REPO_DIR):
         rel_root = os.path.relpath(root, REPO_DIR)
@@ -60,14 +66,14 @@ def main():
             if top_dir in IGNORE_DIRS or top_dir.startswith('.'):
                 dirs.clear(); continue
         for fn in sorted(files):
-            if fn.endswith('.pyc') or '.bak' in fn or is_archive(fn):
+            if fn.endswith('.pyc') or '.bak' in fn or is_archive(fn) or 'server_备份_' in fn:
                 continue
             fp = os.path.join(root, fn)
             rel = os.path.relpath(fp, REPO_DIR).replace('\\', '/')
             try:
                 with open(fp, 'rb') as fh: content = fh.read()
             except: continue
-            blob_sha = get_or_create_blob(content)
+            print(f'  [{len(tree_items)+1}] {rel} ({len(content)} bytes)', flush=True); blob_sha = get_or_create_blob(content)
             tree_items.append({
                 'path': rel, 'mode': '100644',
                 'type': 'blob', 'sha': blob_sha
@@ -104,7 +110,7 @@ def main():
     print(f"  树: {new_tree['sha'][:10]}... ({len(new_tree_items)} 项)")
 
     # ── 4. 创建提交 ──
-    commit_msg = (f"v3 更名为数据台账系统(data-ledger) "
+    commit_msg = (f"v3.1 Windows 最新稳定版 "
                   f"({datetime.now().strftime('%Y-%m-%d %H:%M')})")
     new_commit = api('POST', '/git/commits', {
         'message': commit_msg,
@@ -151,7 +157,7 @@ def main():
     try:
         release = api('POST', '/releases', {
             'tag_name': TAG,
-            'name': f'v3 - 更名为数据台账系统',
+            'name': f'v3.1 - Windows 稳定版',
             'body': (
                 '## ✨ 新功能\n\n'
                 '- **去重预览**：去重前弹窗显示每条重复记录的完整字段信息\n'

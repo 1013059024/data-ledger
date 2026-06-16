@@ -1895,12 +1895,12 @@ def api_upload_import():
             db_execute(f"ALTER TABLE `{tn}` COMMENT = %s", (title or tn,))
             _save_table_manifest()
             kf_map = _load_kf(); kf_map[tn] = kf; _save_kf(kf_map)
-            kf_map = _load_kf(); kf_map[tn] = kf; _save_kf(kf_map)
             msg += f"（空表，已建 {len(uh)} 个字段）"
         return jsonify({"code": 0 if ok else 1, "msg": msg, "table_name": tn})
     ok, msg = create_table_from_data(uh, flt, tn); _cleanup(sid)
     if ok:
         db_execute(f"ALTER TABLE `{tn}` COMMENT = %s", (title or tn,))
+        kf_map = _load_kf(); kf_map[tn] = kf; _save_kf(kf_map)
         _save_table_manifest()
     if ok: msg += f"（省略 {len(ah)-len(uh)} 列，过滤 {before-len(flt)} 行）"
     return jsonify({"code": 0 if ok else 1, "msg": msg, "table_name": tn})
@@ -1970,7 +1970,7 @@ def _serialize_rows(rows):
 def _safe_tablename(name):
     """将标题转为安全的 MySQL 表名，自动处理重名"""
     s = str(name).strip()
-    safe = re.sub(r'[^\w\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\s]', '_', s)
+    safe = re.sub(r'[`\x00]', '', s)
     safe = re.sub(r'\s+', '_', safe).strip('_')
     if not safe or safe[0].isdigit():
         safe = 't_' + safe
